@@ -103,7 +103,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title={`Good day, ${(profile.full_name || "there").split(" ")[0]}`}
-        description="Portfolio health, compliance exposure and this month's position."
+        description="Portfolio health, compliance exposure and the last 30 days."
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
