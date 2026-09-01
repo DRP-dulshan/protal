@@ -71,6 +71,11 @@ export function Sidebar({
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    // Dynamic routes are not fully prefetched by default.
+                    // Forcing it means the next page is already in flight
+                    // before the click, so navigation feels immediate even
+                    // when the server round trip is not.
+                    prefetch
                     className={cn(
                       "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
                       isActive(item.href)
