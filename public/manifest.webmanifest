@@ -1,0 +1,13 @@
+{
+  "name": "D|R|P Property Management",
+  "short_name": "D|R|P PMS",
+  "description": "Property management, leasing and holiday homes operations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

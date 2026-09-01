@@ -1,0 +1,184 @@
+import type { Enums } from "@/lib/db/database.types";
+
+export type Role = Enums<"app_role">;
+
+/**
+ * The UI permission matrix.
+ *
+ * This mirrors the RLS policies in 0010_rls.sql, but it is NOT the security
+ * boundary - it decides what to render and which routes to offer. The database
+ * refuses anything this layer would wrongly allow. Keep the two in step: if a
+ * capability is added here, the matching policy must exist in SQL.
+ */
+export const ROLE_LABELS: Record<Role, string> = {
+  super_admin: "Super Admin",
+  property_manager: "Property Manager",
+  agent: "Leasing / Sales Agent",
+  owner: "Owner",
+  tenant: "Tenant",
+  guest: "Guest",
+  maintenance: "Maintenance / Housekeeping",
+  finance: "Accountant / Finance",
+  marketing: "Marketing / Admin Support",
+};
+
+export type Capability =
+  // Property & units
+  | "units.view"
+  | "units.manage"
+  | "properties.manage"
+  // Owners
+  | "owners.view"
+  | "owners.manage"
+  | "owners.bank_details"
+  // Leasing
+  | "leases.view"
+  | "leases.manage"
+  | "ejari.manage"
+  // Short term
+  | "bookings.view"
+  | "bookings.manage"
+  | "permits.manage"
+  | "housekeeping.view"
+  | "housekeeping.manage"
+  // Finance
+  | "finance.view"
+  | "finance.manage"
+  | "statements.view"
+  | "statements.issue"
+  // Maintenance
+  | "maintenance.view"
+  | "maintenance.raise"
+  | "maintenance.assign"
+  | "maintenance.approve_owner"
+  // Documents & compliance
+  | "documents.view"
+  | "documents.upload"
+  | "compliance.view"
+  // CRM & comms
+  | "leads.manage"
+  | "messages.send"
+  // Admin
+  | "settings.manage"
+  | "users.manage"
+  | "audit.view";
+
+const ALL: Capability[] = [
+  "units.view", "units.manage", "properties.manage",
+  "owners.view", "owners.manage", "owners.bank_details",
+  "leases.view", "leases.manage", "ejari.manage",
+  "bookings.view", "bookings.manage", "permits.manage",
+  "housekeeping.view", "housekeeping.manage",
+  "finance.view", "finance.manage", "statements.view", "statements.issue",
+  "maintenance.view", "maintenance.raise", "maintenance.assign", "maintenance.approve_owner",
+  "documents.view", "documents.upload", "compliance.view",
+  "leads.manage", "messages.send",
+  "settings.manage", "users.manage", "audit.view",
+];
+
+export const CAPABILITIES: Record<Role, Capability[]> = {
+  super_admin: ALL,
+
+  property_manager: [
+    "units.view", "units.manage", "properties.manage",
+    "owners.view", "owners.manage",
+    "leases.view", "leases.manage", "ejari.manage",
+    "bookings.view", "bookings.manage", "permits.manage",
+    "housekeeping.view", "housekeeping.manage",
+    "finance.view", "statements.view",
+    "maintenance.view", "maintenance.raise", "maintenance.assign",
+    "documents.view", "documents.upload", "compliance.view",
+    "leads.manage", "messages.send",
+  ],
+
+  agent: [
+    "units.view",
+    "owners.view",
+    "leases.view", "leases.manage",
+    "bookings.view", "bookings.manage",
+    "maintenance.view", "maintenance.raise",
+    "documents.view", "documents.upload",
+    "leads.manage", "messages.send",
+  ],
+
+  // Owners get a read-only portal, plus approval rights over spend on their
+  // own units and the ability to request work.
+  owner: [
+    "units.view",
+    "leases.view",
+    "bookings.view",
+    "statements.view",
+    "maintenance.view", "maintenance.raise", "maintenance.approve_owner",
+    "documents.view",
+    "compliance.view",
+  ],
+
+  tenant: [
+    "leases.view",
+    "maintenance.view", "maintenance.raise",
+    "documents.view",
+  ],
+
+  guest: [
+    "bookings.view",
+    "maintenance.raise",
+  ],
+
+  maintenance: [
+    "units.view",
+    "housekeeping.view", "housekeeping.manage",
+    "maintenance.view", "maintenance.raise", "maintenance.assign",
+    "documents.view", "documents.upload",
+  ],
+
+  // Full financial access, no property CRUD.
+  finance: [
+    "units.view",
+    "owners.view", "owners.manage", "owners.bank_details",
+    "leases.view",
+    "bookings.view",
+    "finance.view", "finance.manage", "statements.view", "statements.issue",
+    "maintenance.view",
+    "documents.view", "documents.upload", "compliance.view",
+    "audit.view",
+  ],
+
+  // Listing content and media only - never financials.
+  marketing: [
+    "units.view",
+    "bookings.view",
+    "documents.view", "documents.upload",
+    "leads.manage", "messages.send",
+  ],
+};
+
+export function can(role: Role | null | undefined, capability: Capability): boolean {
+  if (!role) return false;
+  return CAPABILITIES[role]?.includes(capability) ?? false;
+}
+
+export function canAny(role: Role | null | undefined, capabilities: Capability[]): boolean {
+  return capabilities.some((c) => can(role, c));
+}
+
+/** Back-office roles land on the staff dashboard; everyone else on a portal. */
+export const STAFF_ROLES: Role[] = [
+  "super_admin",
+  "property_manager",
+  "agent",
+  "finance",
+  "marketing",
+  "maintenance",
+];
+
+export function isStaff(role: Role | null | undefined): boolean {
+  return !!role && STAFF_ROLES.includes(role);
+}
+
+export function homePathForRole(role: Role | null | undefined): string {
+  if (!role) return "/login";
+  if (isStaff(role)) return "/dashboard";
+  if (role === "owner") return "/portal/owner";
+  if (role === "tenant") return "/portal/tenant";
+  return "/portal/guest";
+}

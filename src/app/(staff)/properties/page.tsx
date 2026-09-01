@@ -1,0 +1,149 @@
+import Link from "next/link";
+import { Building2, Plus } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { requireCapability } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
+import { PageHeader, EmptyState } from "@/components/domain/shared";
+import { ExportButton } from "@/components/domain/export-button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PROPERTY_KIND, EMIRATE } from "@/lib/labels";
+
+export const metadata = { title: "Properties" };
+
+export default async function PropertiesPage() {
+  const profile = await requireCapability("units.view");
+  const supabase = await createClient();
+
+  const [propertiesResult, unitsResult] = await Promise.all([
+    supabase
+      .from("properties")
+      .select("*, communities(name, emirate)")
+      .eq("is_active", true)
+      .order("name"),
+    supabase.from("v_units_overview").select("property_id, status").eq("is_active", true),
+  ]);
+
+  const properties = propertiesResult.data ?? [];
+  const units = unitsResult.data ?? [];
+
+  const statsFor = (propertyId: string) => {
+    const own = units.filter((u) => u.property_id === propertyId);
+    return {
+      total: own.length,
+      occupied: own.filter(
+        (u) => u.status === "occupied_long_term" || u.status === "listed_short_term"
+      ).length,
+    };
+  };
+
+  const exportRows = properties.map((p) => {
+    const stats = statsFor(p.id);
+    return {
+      Name: p.name,
+      Type: PROPERTY_KIND[p.kind],
+      Community: p.communities?.name ?? "",
+      Emirate: p.communities?.emirate ? EMIRATE[p.communities.emirate] : "",
+      Developer: p.developer_name ?? "",
+      "Owners association": p.owners_association_name ?? "",
+      "Mollak ID": p.mollak_property_id ?? "",
+      "Units managed": stats.total,
+      Occupied: stats.occupied,
+    };
+  });
+
+  return (
+    <>
+      <PageHeader
+        title="Properties"
+        description="Communities, buildings and villa compounds with units under management."
+        actions={
+          <>
+            <ExportButton rows={exportRows} filename="drp-properties" />
+            {can(profile.role, "properties.manage") && (
+              <Button asChild>
+                <Link href="/properties/new">
+                  <Plus className="size-4" />
+                  Add property
+                </Link>
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {properties.length === 0 ? (
+        <EmptyState
+          title="No properties"
+          description="Add the buildings and compounds where D|R|P manages units."
+          icon={<Building2 className="size-8" />}
+          action={
+            can(profile.role, "properties.manage") ? (
+              <Button asChild>
+                <Link href="/properties/new">Add property</Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {properties.map((property) => {
+            const stats = statsFor(property.id);
+            const rate = stats.total
+              ? Math.round((stats.occupied / stats.total) * 100)
+              : 0;
+
+            return (
+              <Link key={property.id} href={`/units?q=${encodeURIComponent(property.name)}`}>
+                <Card className="h-full transition-shadow hover:shadow-md">
+                  <CardContent className="p-5">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{property.name}</p>
+                        <p className="truncate text-sm text-[var(--muted-foreground)]">
+                          {property.communities?.name}
+                          {property.communities?.emirate &&
+                            ` · ${EMIRATE[property.communities.emirate]}`}
+                        </p>
+                      </div>
+                      <Badge variant="muted">{PROPERTY_KIND[property.kind]}</Badge>
+                    </div>
+
+                    <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                          Units managed
+                        </p>
+                        <p className="tabular text-lg font-semibold">{stats.total}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                          Occupied
+                        </p>
+                        <p className="tabular text-lg font-semibold">{rate}%</p>
+                      </div>
+                    </div>
+
+                    {property.owners_association_name && (
+                      <p className="truncate text-xs text-[var(--muted-foreground)]">
+                        OA: {property.owners_association_name}
+                        {property.mollak_property_id &&
+                          ` · Mollak ${property.mollak_property_id}`}
+                      </p>
+                    )}
+                    {property.developer_name && (
+                      <p className="truncate text-xs text-[var(--muted-foreground)]">
+                        Developer: {property.developer_name}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}

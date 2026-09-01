@@ -1,0 +1,19 @@
+node_modules
+.next
+out
+build
+.DS_Store
+*.pem
+npm-debug.log*
+.env
+.env*.local
+.vercel
+next-env.d.ts
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Local validation database artefacts
+supabase/local/pg.log
