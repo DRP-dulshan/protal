@@ -17,3 +17,6 @@ tsconfig.tsbuildinfo
 
 # Local validation database artefacts
 supabase/local/pg.log
+
+.vercel
+.env*
