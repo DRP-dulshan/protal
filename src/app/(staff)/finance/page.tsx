@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, monthBounds } from "@/lib/dates";
+import { formatDate, rollingWindow } from "@/lib/dates";
 import { formatAED } from "@/lib/money";
 
 export const metadata = { title: "Ledger" };
@@ -31,7 +31,10 @@ export default async function FinancePage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { start, end } = monthBounds();
+  // Default to a rolling window rather than the calendar month, so the ledger
+  // is never empty just because the month has only just started. The date
+  // pickers below still take any range.
+  const { start, end } = rollingWindow(30);
   const from = params.from || start;
   const to = params.to || end;
 
@@ -79,7 +82,7 @@ export default async function FinancePage({
     <>
       <PageHeader
         title="Ledger"
-        description="Every income and expense event, in AED, with VAT applied per line."
+        description="Every income and expense event, in AED, with VAT applied per line. Showing the last 30 days unless you pick a range."
         actions={
           <>
             <ExportButton rows={exportRows} filename="drp-ledger" />
