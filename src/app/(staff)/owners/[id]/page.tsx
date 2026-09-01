@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatMonth } from "@/lib/dates";
+import { formatDate, formatPeriod } from "@/lib/dates";
 import { formatPercent } from "@/lib/money";
 
 export async function generateMetadata({
@@ -348,7 +348,7 @@ export default async function OwnerDetailPage({
                           </Link>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {formatMonth(statement.period_start)}
+                          {formatPeriod(statement.period_start, statement.period_end)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-right">
                           <Money amount={statement.gross_income_aed} compact />

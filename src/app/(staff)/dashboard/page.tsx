@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, monthBounds } from "@/lib/dates";
+import { formatDate, rollingWindow } from "@/lib/dates";
 import { COMPLIANCE_KIND } from "@/lib/labels";
 import { formatAED } from "@/lib/money";
 
@@ -31,7 +31,9 @@ export const metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const { start, end } = monthBounds();
+  // Rolling window, not calendar month: on the 1st a month-to-date figure
+  // is empty and tells the reader nothing.
+  const { start, end } = rollingWindow(30);
 
   // Every query below runs as the signed-in user, so a property manager sees
   // only their assigned buildings without any extra filtering here.
@@ -121,7 +123,7 @@ export default async function DashboardPage() {
         />
         {showFinance ? (
           <StatCard
-            label="Income this month"
+            label="Income · last 30 days"
             value={formatAED(income, { decimals: false })}
             sublabel={`Expenses ${formatAED(expenses, { decimals: false })}`}
             icon={<Building2 className="size-5" />}
@@ -279,7 +281,7 @@ export default async function DashboardPage() {
       {showFinance && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="text-base">This month at a glance</CardTitle>
+            <CardTitle className="text-base">Last 30 days at a glance</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>

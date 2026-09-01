@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatMonth } from "@/lib/dates";
+import { formatDate, formatPeriod } from "@/lib/dates";
 
 export const metadata = { title: "My statements" };
 
@@ -77,7 +77,7 @@ export default async function OwnerStatementsPage() {
                       href={`/portal/owner/statements/${statement.id}`}
                       className="font-medium hover:underline"
                     >
-                      {formatMonth(statement.period_start)}
+                      {formatPeriod(statement.period_start, statement.period_end)}
                     </Link>
                     <p className="text-xs text-[var(--muted-foreground)]">
                       {statement.statement_number}
