@@ -73,6 +73,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
     path.startsWith("/setup") ||
+    // Scheduled jobs carry no session; they authenticate with CRON_SECRET.
+    path.startsWith("/api/keep-alive") ||
     path === "/";
 
   const exp = accessTokenExpiry(request);
