@@ -17,6 +17,9 @@ const ERRORS: Record<string, string> = {
   account_disabled:
     "This account has been deactivated. Contact your administrator.",
   missing: "Enter both your email address and password.",
+  unavailable:
+    "The service is temporarily unavailable, so we could not check your sign-in. " +
+    "Your details are fine - please try again shortly.",
 };
 
 export default async function LoginPage({

@@ -15,7 +15,21 @@ export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error || !data.user) redirect("/login?error=invalid");
+  if (error) {
+    // Distinguish "we could not reach the backend" from "wrong password".
+    // Supabase pauses idle free-tier projects, and when that happens the host
+    // stops resolving - reporting it as a bad password sends the user off
+    // retyping credentials that were never wrong.
+    const unreachable =
+      error.status === undefined ||
+      error.status === 0 ||
+      error.status >= 500 ||
+      /fetch failed|network|ENOTFOUND|EAI_AGAIN|timeout/i.test(error.message);
+
+    redirect(`/login?error=${unreachable ? "unavailable" : "invalid"}`);
+  }
+
+  if (!data.user) redirect("/login?error=invalid");
 
   const { data: profile } = await supabase
     .from("profiles")
