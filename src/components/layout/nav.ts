@@ -6,10 +6,10 @@ import type { Capability } from "@/lib/auth/rbac";
  * appear. Items whose capability the user lacks are never rendered - and the
  * database would refuse the data anyway.
  *
- * Only routes that exist are listed. Phase 2 surfaces (bookings, DET permit
- * management, housekeeping, maintenance queue, the standalone document vault)
- * have their tables, constraints and RLS in place but no screen yet; they are
- * added here as they are built rather than left as dead links.
+ * Only routes that exist are listed. Phase 2 surfaces still without a screen
+ * (housekeeping, the maintenance queue, the standalone document vault) have
+ * their tables, constraints and RLS in place; they are added here as they are
+ * built rather than left as dead links.
  */
 export interface NavItem {
   label: string;
@@ -43,6 +43,12 @@ export const STAFF_NAV: NavSection[] = [
     label: "Leasing",
     items: [
       { label: "Tenancies", href: "/leases", icon: "FileSignature", capability: "leases.view" },
+    ],
+  },
+  {
+    label: "Holiday homes",
+    items: [
+      { label: "Bookings", href: "/bookings", icon: "CalendarDays", capability: "bookings.view" },
     ],
   },
   {

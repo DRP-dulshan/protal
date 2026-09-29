@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileSignature, Pencil, Plus, ShieldAlert } from "lucide-react";
+import { CalendarPlus, FileSignature, Pencil, Plus, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -37,6 +37,10 @@ import { formatPercent } from "@/lib/money";
 import { UNIT_KIND, FURNISHING, COMPLIANCE_KIND } from "@/lib/labels";
 import { RecordActions } from "@/components/domain/record-actions";
 import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
+import { PermitDialog } from "./permit-dialog";
+import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
+import { BookingCalendar } from "@/components/domain/booking-calendar";
+import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
 
 export async function generateMetadata({
   params,
@@ -58,10 +62,17 @@ export async function generateMetadata({
 
 export default async function UnitDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; month?: string }>;
 }) {
   const { id } = await params;
+  const { tab, month: monthParam } = await searchParams;
+  const month = parseMonth(monthParam);
+  const grid = monthGrid(month);
+  const gridStart = grid[0][0];
+  const gridEnd = grid[grid.length - 1][6];
   const profile = await requireCapability("units.view");
   const supabase = await createClient();
 
@@ -81,6 +92,8 @@ export default async function UnitDetailPage({
     complianceResult,
     documentsResult,
     agreementResult,
+    staysResult,
+    blocksResult,
   ] = await Promise.all([
     supabase.from("v_units_overview").select("*").eq("id", id).maybeSingle(),
     supabase
@@ -115,6 +128,20 @@ export default async function UnitDetailPage({
       .eq("unit_id", id)
       .eq("is_active", true)
       .maybeSingle(),
+    supabase
+      .from("bookings")
+      .select("id, check_in, check_out, channel, status, guests(full_name)")
+      .eq("unit_id", id)
+      .in("status", ["inquiry", "tentative", "confirmed", "checked_in", "checked_out"])
+      .lte("check_in", gridEnd)
+      .gt("check_out", gridStart),
+    supabase
+      .from("availability_blocks")
+      .select("id, start_date, end_date, reason, note")
+      .eq("unit_id", id)
+      .neq("reason", "booking")
+      .gt("end_date", dubaiToday() < gridStart ? dubaiToday() : gridStart)
+      .order("start_date"),
   ]);
 
   const overview = overviewResult.data;
@@ -124,6 +151,18 @@ export default async function UnitDetailPage({
   const compliance = complianceResult.data ?? [];
   const documents = documentsResult.data ?? [];
   const agreement = agreementResult.data;
+  const stays = (staysResult.data ?? []).map((b) => ({
+    id: b.id,
+    checkIn: b.check_in,
+    checkOut: b.check_out,
+    source: b.channel,
+    label: b.guests?.full_name ?? null,
+    pending: b.status === "inquiry" || b.status === "tentative",
+    href: `/bookings/${b.id}`,
+  }));
+  const holds = blocksResult.data ?? [];
+  const today = dubaiToday();
+  const upcomingHolds = holds.filter((h) => h.end_date > today);
 
   const activeLease = leases.find(
     (l) => l.status === "active" || l.status === "expiring"
@@ -237,10 +276,15 @@ export default async function UnitDetailPage({
         </Card>
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs
+        defaultValue={
+          tab && ["tenancy", "calendar", "permits", "documents"].includes(tab) ? tab : "overview"
+        }
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenancy">Tenancy</TabsTrigger>
+          {isShortTerm && <TabsTrigger value="calendar">Calendar</TabsTrigger>}
           {isShortTerm && <TabsTrigger value="permits">DET permits</TabsTrigger>}
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
         </TabsList>
@@ -417,10 +461,87 @@ export default async function UnitDetailPage({
         </TabsContent>
 
         {isShortTerm && (
+          <>
+          <TabsContent value="calendar">
+            <Card className="mb-5">
+              <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base">Availability</CardTitle>
+                {can(profile.role, "bookings.manage") && (
+                  <div className="flex flex-wrap gap-2">
+                    <BlockDatesDialog unitId={unit.id} />
+                    <Button asChild size="sm">
+                      <Link href={`/bookings/new?unit=${unit.id}`}>
+                        <CalendarPlus className="size-4" />
+                        New booking
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <BookingCalendar
+                  month={month}
+                  stays={stays}
+                  blocks={holds.map((h) => ({
+                    id: h.id,
+                    start: h.start_date,
+                    end: h.end_date,
+                    reason: h.reason,
+                  }))}
+                  monthHref={(m) => `/units/${unit.id}?tab=calendar&month=${m}`}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Blocked dates</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {upcomingHolds.length === 0 ? (
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    No upcoming owner stays, maintenance or other blocks.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {upcomingHolds.map((h) => (
+                      <li
+                        key={h.id}
+                        className="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0 text-sm">
+                          <span className="font-medium">
+                            {h.reason === "owner_stay"
+                              ? "Owner stay"
+                              : h.reason === "maintenance"
+                                ? "Maintenance"
+                                : "Blocked"}
+                          </span>
+                          <span className="tabular ml-2 text-[var(--muted-foreground)]">
+                            {formatDate(h.start_date)} → {formatDate(h.end_date)}
+                          </span>
+                          {h.note && (
+                            <p className="truncate text-xs text-[var(--muted-foreground)]">{h.note}</p>
+                          )}
+                        </div>
+                        {can(profile.role, "bookings.manage") && (
+                          <RemoveBlockButton blockId={h.id} unitId={unit.id} />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="permits">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle className="text-base">DET holiday home permits</CardTitle>
+                {can(profile.role, "permits.manage") && (
+                  <PermitDialog unitId={unit.id} hasPermit={permits.length > 0} />
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {permits.length === 0 ? (
@@ -468,6 +589,7 @@ export default async function UnitDetailPage({
               </CardContent>
             </Card>
           </TabsContent>
+          </>
         )}
 
         <TabsContent value="documents">

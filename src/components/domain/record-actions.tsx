@@ -40,12 +40,14 @@ function ActionForm({
   idName,
   id,
   confirmText,
+  hidden,
   children,
 }: {
   action: Action;
   idName: string;
   id: string;
   confirmText: string;
+  hidden?: boolean;
   children: React.ReactNode;
 }) {
   const [state, formAction] = useActionState<ActionState, FormData>(action, {});
@@ -58,6 +60,7 @@ function ActionForm({
   return (
     <form
       action={formAction}
+      hidden={hidden}
       onSubmit={(e) => {
         if (!confirm(confirmText)) e.preventDefault();
       }}
@@ -94,29 +97,30 @@ export function RecordActions({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {isActive ? (
-        <ActionForm
-          action={archive}
-          idName={idName}
-          id={id}
-          confirmText={`Archive this ${noun}? It will be hidden from lists and reports. You can restore it later.`}
-        >
-          <ActionButton label="Archive" pendingLabel="Archiving…" icon={<Archive className="size-4" />} />
-        </ActionForm>
-      ) : (
-        <ActionForm
-          action={restore}
-          idName={idName}
-          id={id}
-          confirmText={`Restore this ${noun}?`}
-        >
-          <ActionButton
-            label="Restore"
-            pendingLabel="Restoring…"
-            icon={<ArchiveRestore className="size-4" />}
-          />
-        </ActionForm>
-      )}
+      {/* Both stay mounted so the one just pressed can still report its
+          result after the page swaps it for the other. */}
+      <ActionForm
+        action={archive}
+        idName={idName}
+        id={id}
+        hidden={!isActive}
+        confirmText={`Archive this ${noun}? It will be hidden from lists and reports. You can restore it later.`}
+      >
+        <ActionButton label="Archive" pendingLabel="Archiving…" icon={<Archive className="size-4" />} />
+      </ActionForm>
+      <ActionForm
+        action={restore}
+        idName={idName}
+        id={id}
+        hidden={isActive}
+        confirmText={`Restore this ${noun}?`}
+      >
+        <ActionButton
+          label="Restore"
+          pendingLabel="Restoring…"
+          icon={<ArchiveRestore className="size-4" />}
+        />
+      </ActionForm>
       {remove && (
         <ActionForm
           action={remove}

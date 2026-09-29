@@ -123,5 +123,8 @@ Tenancies are created in the app and amended in the database for now.
 
 Phase 2's data model (Holiday Homes, DET permits, bookings, housekeeping,
 maintenance, communications) is fully built, constrained, RLS-protected and
-seeded; only its back-office screens remain, and they need no migration.
+seeded. Holiday homes have their back-office screens: bookings (list, new,
+confirm / check in / check out / cancel), DET permits and a per-unit calendar
+with blocked dates. Housekeeping, maintenance and communications screens
+remain, and need no migration.
 Phase 3 has integration points reserved.
