@@ -12,12 +12,12 @@ export default async function EditUnitPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("units.manage");
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
 
   const supabase = await createClient();
-  const [unitResult, ownershipResult, propertiesResult, ownersResult] = await Promise.all([
+  const [, unitResult, ownershipResult, propertiesResult, ownersResult] = await Promise.all([
+    requireCapability("units.manage"),
     supabase.from("units").select("*, properties(name)").eq("id", id).maybeSingle(),
     supabase
       .from("unit_ownerships")

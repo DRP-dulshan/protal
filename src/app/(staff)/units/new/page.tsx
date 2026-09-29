@@ -10,11 +10,12 @@ export default async function NewUnitPage({
 }: {
   searchParams: Promise<{ property?: string }>;
 }) {
-  await requireCapability("units.manage");
   const params = await searchParams;
   const supabase = await createClient();
 
-  const [propertiesResult, ownersResult] = await Promise.all([
+  const [, propertiesResult, ownersResult] = await Promise.all([
+
+    requireCapability("units.manage"),
     supabase
       .from("properties")
       .select("id, name, communities(name)")

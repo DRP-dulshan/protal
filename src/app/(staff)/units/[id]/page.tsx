@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarPlus, FileSignature, Pencil, Plus, ShieldAlert } from "lucide-react";
@@ -42,19 +43,20 @@ import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
 import { BookingCalendar } from "@/components/domain/booking-calendar";
 import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
 
+/** Shared by the page and its metadata, so the overview row is fetched once. */
+const getOverview = cache(async (id: string) => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("v_units_overview").select("*").eq("id", id).maybeSingle();
+  return data;
+});
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("v_units_overview")
-    .select("unit_number, property_name")
-    .eq("id", id)
-    .maybeSingle();
-
+  const data = await getOverview(id);
   return {
     title: data ? `${data.property_name} ${data.unit_number}` : "Unit",
   };
@@ -73,19 +75,16 @@ export default async function UnitDetailPage({
   const grid = monthGrid(month);
   const gridStart = grid[0][0];
   const gridEnd = grid[grid.length - 1][6];
-  const profile = await requireCapability("units.view");
   const supabase = await createClient();
 
-  const { data: unit } = await supabase
-    .from("units")
-    .select("*, properties(id, name, kind, community_id, communities(name, emirate))")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!unit) notFound();
-
+  // Everything in one batch: all of it is keyed by the unit id from the URL,
+  // and RLS guards each query, so nothing needs to wait for the profile or
+  // the unit row. From Dubai to the database region each extra sequential
+  // step costs a full round trip.
   const [
-    overviewResult,
+    profile,
+    { data: unit },
+    overview,
     ownershipResult,
     leasesResult,
     permitResult,
@@ -95,7 +94,13 @@ export default async function UnitDetailPage({
     staysResult,
     blocksResult,
   ] = await Promise.all([
-    supabase.from("v_units_overview").select("*").eq("id", id).maybeSingle(),
+    requireCapability("units.view"),
+    supabase
+      .from("units")
+      .select("*, properties(id, name, kind, community_id, communities(name, emirate))")
+      .eq("id", id)
+      .maybeSingle(),
+    getOverview(id),
     supabase
       .from("unit_ownerships")
       .select("*, owners(id, full_name, email, phone, is_company)")
@@ -144,7 +149,8 @@ export default async function UnitDetailPage({
       .order("start_date"),
   ]);
 
-  const overview = overviewResult.data;
+  if (!unit) notFound();
+
   const ownerships = ownershipResult.data ?? [];
   const leases = leasesResult.data ?? [];
   const permits = permitResult.data ?? [];

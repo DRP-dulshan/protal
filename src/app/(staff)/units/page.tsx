@@ -44,7 +44,6 @@ export default async function UnitsPage({
     permit?: string;
   }>;
 }) {
-  const profile = await requireCapability("units.view");
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -74,7 +73,7 @@ export default async function UnitsPage({
     );
   }
 
-  const { data: units, error } = await query;
+  const [profile, { data: units, error }] = await Promise.all([requireCapability("units.view"), query]);
   const rows = units ?? [];
 
   const exportRows = rows.map((u) => ({

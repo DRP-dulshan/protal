@@ -5,8 +5,10 @@ import { SettingsForm } from "./settings-form";
 export const metadata = { title: "Company settings" };
 
 export default async function SettingsPage() {
-  await requireCapability("settings.manage");
-  const settings = await getCompanySettings();
+  const [, settings] = await Promise.all([
+    requireCapability("settings.manage"),
+    getCompanySettings(),
+  ]);
 
   return (
     <>

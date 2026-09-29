@@ -26,7 +26,6 @@ export default async function OwnersPage({
 }: {
   searchParams: Promise<{ q?: string; show?: string }>;
 }) {
-  const profile = await requireCapability("owners.view");
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -42,7 +41,7 @@ export default async function OwnersPage({
     );
   }
 
-  const { data, error } = await query;
+  const [profile, { data, error }] = await Promise.all([requireCapability("owners.view"), query]);
   const owners = (data ?? []).map((owner) => ({
     ...owner,
     unitCount: (owner.unit_ownerships ?? []).filter((o) => o.end_date === null).length,

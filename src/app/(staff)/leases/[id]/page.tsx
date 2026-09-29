@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -33,18 +34,28 @@ import { InstallmentActions } from "./installment-actions";
 import { formatDate, daysUntil } from "@/lib/dates";
 import { PAYMENT_METHOD, DEPOSIT_STATUS } from "@/lib/labels";
 
+/** Shared by the page and its metadata, so the lease is fetched once. */
+const getLease = cache(async (id: string) => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("leases")
+    .select(
+      `*,
+       tenants(id, full_name, email, phone, whatsapp, nationality, emirates_id, emirates_id_expiry),
+       units(id, unit_number, dewa_premise_number, properties(id, name))`
+    )
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+});
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("leases")
-    .select("lease_number")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await getLease(id);
   return { title: data?.lease_number ?? "Tenancy" };
 }
 
@@ -54,24 +65,15 @@ export default async function LeaseDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = await requireCapability("leases.view");
   const supabase = await createClient();
-  const settings = await getCompanySettings();
 
-  const { data: lease } = await supabase
-    .from("leases")
-    .select(
-      `*,
-       tenants(id, full_name, email, phone, whatsapp, nationality, emirates_id, emirates_id_expiry),
-       units(id, unit_number, dewa_premise_number, properties(id, name))`
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!lease) notFound();
-
-  const [installmentsResult, occupantsResult, documentsResult, depositsResult] =
+  // One batch: the children are keyed by the lease id from the URL, so they
+  // need not wait for the lease row itself.
+  const [profile, settings, lease, installmentsResult, occupantsResult, documentsResult, depositsResult] =
     await Promise.all([
+      requireCapability("leases.view"),
+      getCompanySettings(),
+      getLease(id),
       supabase
         .from("lease_installments")
         .select("*")
@@ -96,6 +98,8 @@ export default async function LeaseDetailPage({
         .eq("lease_id", id)
         .order("occurred_on"),
     ]);
+
+  if (!lease) notFound();
 
   const installments = installmentsResult.data ?? [];
   const occupants = occupantsResult.data ?? [];

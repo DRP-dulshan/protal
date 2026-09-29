@@ -15,12 +15,12 @@ export default async function EditPropertyPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const profile = await requireCapability("properties.manage");
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
 
   const supabase = await createClient();
-  const [propertyResult, communitiesResult] = await Promise.all([
+  const [profile, propertyResult, communitiesResult] = await Promise.all([
+    requireCapability("properties.manage"),
     supabase.from("properties").select("*").eq("id", id).maybeSingle(),
     supabase.from("communities").select("id, name, emirate").order("name"),
   ]);

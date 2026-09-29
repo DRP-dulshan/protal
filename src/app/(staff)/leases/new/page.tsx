@@ -10,12 +10,12 @@ export default async function NewLeasePage({
 }: {
   searchParams: Promise<{ unit?: string }>;
 }) {
-  await requireCapability("leases.manage");
   const params = await searchParams;
   const supabase = await createClient();
-  const settings = await getCompanySettings();
 
-  const [unitsResult, tenantsResult] = await Promise.all([
+  const [, settings, unitsResult, tenantsResult] = await Promise.all([
+    requireCapability("leases.manage"),
+    getCompanySettings(),
     // Only units that can actually take a long-term tenancy.
     supabase
       .from("v_units_overview")

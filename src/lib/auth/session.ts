@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isConfigured } from "@/lib/env";
@@ -25,6 +26,14 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
   // the caller down the redirect path instead of throwing from deep inside a
   // page render.
   if (!isConfigured) return null;
+
+  // No auth cookie means no session: answer without asking the database.
+  // This keeps the sign-in page and the signed-out redirect free of a round
+  // trip to the Supabase region.
+  const cookieStore = await cookies();
+  if (!cookieStore.getAll().some((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))) {
+    return null;
+  }
 
   const supabase = await createClient();
 

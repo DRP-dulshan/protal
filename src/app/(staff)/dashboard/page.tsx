@@ -29,7 +29,6 @@ import { formatAED } from "@/lib/money";
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const profile = await requireProfile();
   const supabase = await createClient();
   // Rolling window, not calendar month: on the 1st a month-to-date figure
   // is empty and tells the reader nothing.
@@ -37,8 +36,12 @@ export default async function DashboardPage() {
 
   // Every query below runs as the signed-in user, so a property manager sees
   // only their assigned buildings without any extra filtering here.
-  const [unitsResult, complianceResult, ledgerResult, maintenanceResult] =
+  // The profile check travels in the same batch as the data: RLS already
+  // guards every query, so waiting for the profile first would only add a
+  // full round trip to the database region.
+  const [profile, unitsResult, complianceResult, ledgerResult, maintenanceResult] =
     await Promise.all([
+      requireProfile(),
       supabase
         .from("v_units_overview")
         .select("id, status, operating_mode, property_name, unit_number, has_valid_permit")
@@ -57,20 +60,18 @@ export default async function DashboardPage() {
         .gte("entry_date", start)
         .lte("entry_date", end),
 
-      can(profile.role, "maintenance.view")
-        ? supabase
-            .from("maintenance_requests")
-            .select("id, ticket_number, title, status, priority, reported_at, unit_id")
-            .not("status", "in", "(closed,cancelled,rejected)")
-            .order("reported_at", { ascending: false })
-            .limit(5)
-        : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("maintenance_requests")
+        .select("id, ticket_number, title, status, priority, reported_at, unit_id")
+        .not("status", "in", "(closed,cancelled,rejected)")
+        .order("reported_at", { ascending: false })
+        .limit(5),
     ]);
 
   const units = unitsResult.data ?? [];
   const compliance = complianceResult.data ?? [];
   const ledger = ledgerResult.data ?? [];
-  const tickets = maintenanceResult.data ?? [];
+  const tickets = can(profile.role, "maintenance.view") ? (maintenanceResult.data ?? []) : [];
 
   const totalUnits = units.length;
   const occupied = units.filter((u) => u.status === "occupied_long_term").length;

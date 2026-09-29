@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Lock, Pencil } from "lucide-react";
@@ -35,18 +36,20 @@ import { Button } from "@/components/ui/button";
 import { RecordActions } from "@/components/domain/record-actions";
 import { archiveOwner, deleteOwner, restoreOwner } from "../actions";
 
+/** Shared by the page and its metadata, so the owner is fetched once. */
+const getOwner = cache(async (id: string) => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("owners").select("*").eq("id", id).maybeSingle();
+  return data;
+});
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("owners")
-    .select("full_name")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await getOwner(id);
   return { title: data?.full_name ?? "Owner" };
 }
 
@@ -56,20 +59,12 @@ export default async function OwnerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = await requireCapability("owners.view");
   const supabase = await createClient();
 
-  const { data: owner } = await supabase
-    .from("owners")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!owner) notFound();
-
-  const showBank = can(profile.role, "owners.bank_details");
-
+  // One batch: every related query is keyed by the owner id from the URL.
   const [
+    profile,
+    owner,
     unitsResult,
     statementsResult,
     documentsResult,
@@ -77,6 +72,8 @@ export default async function OwnerDetailPage({
     agreementsResult,
     loginsResult,
   ] = await Promise.all([
+    requireCapability("owners.view"),
+    getOwner(id),
     supabase
       .from("unit_ownerships")
       .select(
@@ -95,13 +92,8 @@ export default async function OwnerDetailPage({
       .select("*")
       .eq("owner_id", id)
       .order("created_at", { ascending: false }),
-    showBank
-      ? supabase
-          .from("owner_bank_accounts")
-          .select("*")
-          .eq("owner_id", id)
-          .eq("is_active", true)
-      : Promise.resolve({ data: [], error: null }),
+    // Gated on the role below; RLS also withholds it from non-finance roles.
+    supabase.from("owner_bank_accounts").select("*").eq("owner_id", id).eq("is_active", true),
     supabase
       .from("management_agreements")
       .select("*, units(unit_number, properties(name))")
@@ -113,10 +105,13 @@ export default async function OwnerDetailPage({
       .eq("owner_id", id),
   ]);
 
+  if (!owner) notFound();
+
+  const showBank = can(profile.role, "owners.bank_details");
   const ownedUnits = unitsResult.data ?? [];
   const statements = statementsResult.data ?? [];
   const documents = documentsResult.data ?? [];
-  const bankAccounts = bankResult.data ?? [];
+  const bankAccounts = showBank ? (bankResult.data ?? []) : [];
   const agreements = agreementsResult.data ?? [];
   const logins = (loginsResult.data ?? []).map((row) => ({
     profileId: row.profile_id,

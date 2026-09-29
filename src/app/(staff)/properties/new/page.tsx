@@ -6,13 +6,12 @@ import { PropertyForm } from "./property-form";
 export const metadata = { title: "Add property" };
 
 export default async function NewPropertyPage() {
-  await requireCapability("properties.manage");
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("communities")
-    .select("id, name, emirate")
-    .order("name");
+  const [, { data }] = await Promise.all([
+    requireCapability("properties.manage"),
+    supabase.from("communities").select("id, name, emirate").order("name"),
+  ]);
 
   return (
     <>

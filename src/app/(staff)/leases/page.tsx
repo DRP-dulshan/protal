@@ -35,7 +35,6 @@ export default async function LeasesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; ejari?: string }>;
 }) {
-  const profile = await requireCapability("leases.view");
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -56,7 +55,7 @@ export default async function LeasesPage({
     );
   }
 
-  const { data, error } = await query;
+  const [profile, { data, error }] = await Promise.all([requireCapability("leases.view"), query]);
   const leases = data ?? [];
 
   const exportRows = leases.map((l) => ({

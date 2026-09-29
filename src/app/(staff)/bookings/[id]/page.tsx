@@ -14,18 +14,20 @@ import { BookingActions } from "./booking-actions";
 export const metadata = { title: "Booking" };
 
 export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
-  const profile = await requireCapability("bookings.view");
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
 
   const supabase = await createClient();
-  const { data: b } = await supabase
-    .from("bookings")
-    .select(
-      "*, guests(id, full_name, email, phone, nationality, passport_number), units(id, unit_number, properties(name))"
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [profile, { data: b }] = await Promise.all([
+    requireCapability("bookings.view"),
+    supabase
+      .from("bookings")
+      .select(
+        "*, guests(id, full_name, email, phone, nationality, passport_number), units(id, unit_number, properties(name))"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+  ]);
   if (!b) notFound();
 
   const unitLabel = `${b.units?.properties?.name ?? ""} · ${b.units?.unit_number ?? ""}`;

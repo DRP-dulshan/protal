@@ -17,12 +17,11 @@ export default async function PropertiesPage({
 }: {
   searchParams: Promise<{ show?: string }>;
 }) {
-  const profile = await requireCapability("units.view");
   const archived = (await searchParams).show === "archived";
-  const canManage = can(profile.role, "properties.manage");
   const supabase = await createClient();
 
-  const [propertiesResult, unitsResult] = await Promise.all([
+  const [profile, propertiesResult, unitsResult] = await Promise.all([
+    requireCapability("units.view"),
     supabase
       .from("properties")
       .select("*, communities(name, emirate)")
@@ -31,6 +30,7 @@ export default async function PropertiesPage({
     supabase.from("v_units_overview").select("property_id, status").eq("is_active", true),
   ]);
 
+  const canManage = can(profile.role, "properties.manage");
   const properties = propertiesResult.data ?? [];
   const units = unitsResult.data ?? [];
 

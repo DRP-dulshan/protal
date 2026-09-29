@@ -10,11 +10,12 @@ export default async function NewBookingPage({
 }: {
   searchParams: Promise<{ unit?: string }>;
 }) {
-  await requireCapability("bookings.manage");
   const params = await searchParams;
   const supabase = await createClient();
 
-  const [unitsResult, guestsResult] = await Promise.all([
+  const [, unitsResult, guestsResult] = await Promise.all([
+
+    requireCapability("bookings.manage"),
     supabase
       .from("v_units_overview")
       .select("id, unit_number, property_name, has_valid_permit, base_nightly_rate_aed")

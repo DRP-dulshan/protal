@@ -40,7 +40,6 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<{ q?: string; view?: string; unit?: string }>;
 }) {
-  const profile = await requireCapability("bookings.view");
   const params = await searchParams;
   const view: View = params.view && params.view in VIEWS ? (params.view as View) : "upcoming";
   const today = dubaiToday();
@@ -68,7 +67,8 @@ export default async function BookingsPage({
     query = query.or(`booking_number.ilike.%${term}%,external_booking_id.ilike.%${term}%`);
   }
 
-  const [{ data, error }, unitsResult, todayResult] = await Promise.all([
+  const [profile, { data, error }, unitsResult, todayResult] = await Promise.all([
+    requireCapability("bookings.view"),
     query.limit(500),
     supabase
       .from("v_units_overview")
