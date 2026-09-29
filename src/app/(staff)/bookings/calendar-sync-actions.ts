@@ -41,7 +41,7 @@ function refresh(id?: string) {
   flushEmailsSoon();
   if (id) revalidatePath(`/units/${id}`);
   revalidatePath("/bookings");
-  revalidatePath("/bookings/sync");
+  revalidatePath("/calendar-sync");
 }
 
 /** Saves (or clears) a unit's Airbnb calendar link, then syncs it straight away. */

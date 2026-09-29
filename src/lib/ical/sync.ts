@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db/database.types";
 import { parseICal, toAirbnbEvents, ICalError } from "./parse";
+import { isAirbnbCalendarUrl } from "./url";
+
+export { isAirbnbCalendarUrl };
 
 type Client = SupabaseClient<Database>;
 
@@ -18,26 +21,6 @@ export interface SyncResult {
 const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 3;
-
-/**
- * Only Airbnb's own hosts are fetched. The URL is typed in by staff, but the
- * server does the fetching, so an unrestricted URL would let anyone with that
- * form point our server at internal addresses.
- */
-export function isAirbnbCalendarUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      (url.port === "" || url.port === "443") &&
-      /(^|\.)airbnb\.[a-z]{2,3}(\.[a-z]{2})?$/i.test(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
 
 /** Downloads a feed, following redirects only while they stay on Airbnb. */
 export async function fetchCalendar(url: string): Promise<string> {
