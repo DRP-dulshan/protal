@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isPathAllowed,
   portalForHost,
+  portalForRequest,
   roleAllowedOnPortal,
   safeNextPath,
 } from "@/lib/portal";
@@ -17,6 +18,25 @@ test("hostname decides the portal", () => {
   assert.equal(portalForHost("drp-pms.vercel.app", "admin"), "admin");
   assert.equal(portalForHost("localhost:3000", "nonsense"), null);
   assert.equal(portalForHost(null), null);
+});
+
+test("a Server Action redirect render keeps its portal", () => {
+  // Next.js fetches the redirect target from localhost and forwards the
+  // browser's hostname; that render must land on the same portal.
+  assert.equal(portalForRequest("localhost:3000", "owner.localhost:3000"), "owner");
+  assert.equal(portalForRequest("localhost:3000", "owner.localhost:3000", "admin"), "owner");
+  assert.equal(portalForRequest("127.0.0.1:3000", "admin.drp.ae, proxy.internal"), "admin");
+});
+
+test("a forwarded host cannot move a request to the other portal", () => {
+  assert.equal(portalForRequest("owner.drp.ae", "admin.drp.ae"), "owner");
+  assert.equal(portalForRequest("admin.drp.ae", "owner.drp.ae"), "admin");
+});
+
+test("with no portal in either header, only the fallback applies", () => {
+  assert.equal(portalForRequest("localhost:3000", null), null);
+  assert.equal(portalForRequest("localhost:3000", "localhost:3000", "admin"), "admin");
+  assert.equal(portalForRequest("drp-pms.vercel.app", "drp-pms.vercel.app"), null);
 });
 
 test("admin routes 404 on the owner host", () => {

@@ -1,11 +1,15 @@
 import { headers } from "next/headers";
 import { env } from "@/lib/env";
-import { portalForHost, type Portal } from "@/lib/portal";
+import { portalForRequest, type Portal } from "@/lib/portal";
 
 /** The portal the current request was made to, from its Host header. */
 export async function currentPortal(): Promise<Portal | null> {
   const headerList = await headers();
-  return portalForHost(headerList.get("host"), env.portalFallback);
+  return portalForRequest(
+    headerList.get("host"),
+    headerList.get("x-forwarded-host"),
+    env.portalFallback
+  );
 }
 
 /** Where to send a session that does not belong on this portal. */
