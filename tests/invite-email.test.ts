@@ -1,0 +1,39 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { buildPortalInvite } from "@/lib/notify/invite-email";
+
+const base = {
+  ownerName: "Tara <Topic>",
+  email: "tara@example.com",
+  link: "https://owner.drp.test/auth/confirm?token_hash=abc&type=invite",
+  portalUrl: "https://owner.drp.test",
+  company: {
+    legal_name: "DRP Real Estate Brokers LLC",
+    registered_address: "DRP, Golden Mile 09, Palm Jumeirah, Dubai",
+    phone: "+971 4 529 4904",
+    email: "office@dubairapidproperties.com",
+  },
+};
+
+test("the plain-text invite greets the owner, gives the link and the company's details", () => {
+  const { subject, text } = buildPortalInvite(base);
+  assert.equal(subject, "Your D|R|P owner portal is ready");
+  assert.match(text, /^Dear Tara <Topic>,\n/);
+  assert.match(text, /set your password here:\nhttps:\/\/owner\.drp\.test\/auth\/confirm\?token_hash=abc&type=invite\n/);
+  assert.match(text, /Email: tara@example\.com/);
+  assert.match(text, /\+971 4 529 4904 · office@dubairapidproperties\.com/);
+});
+
+test("the HTML invite escapes names and links, and loads the logo from the portal", () => {
+  const { html } = buildPortalInvite(base);
+  assert.match(html, /Welcome, Tara &lt;Topic&gt;/);
+  assert.doesNotMatch(html, /<Topic>/);
+  assert.match(html, /href="https:\/\/owner\.drp\.test\/auth\/confirm\?token_hash=abc&amp;type=invite"/);
+  assert.match(html, /src="https:\/\/owner\.drp\.test\/logo-white\.png"/);
+  assert.match(html, /DRP Real Estate Brokers LLC/);
+});
+
+test("missing company details leave no empty lines behind", () => {
+  const { text } = buildPortalInvite({ ...base, company: null });
+  assert.match(text, /Kind regards,\nD\|R\|P - Dubai Rapid Properties$/);
+});
