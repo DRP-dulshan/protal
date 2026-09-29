@@ -57,7 +57,7 @@ export function StatementDocument({
         <div>
           <Logo imageClassName="w-32" />
           <p className="mt-3 text-sm font-medium">
-            {company?.legal_name ?? "D|R|P Real Estate"}
+            {company?.legal_name ?? "DRP Real Estate Brokers LLC"}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-neutral-600">
             {company?.registered_address}
@@ -72,6 +72,12 @@ export function StatementDocument({
               <>
                 <br />
                 TRN {company.trn}
+              </>
+            )}
+            {(company?.phone || company?.email) && (
+              <>
+                <br />
+                {[company.phone, company.email].filter(Boolean).join(" · ")}
               </>
             )}
           </p>

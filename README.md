@@ -86,6 +86,7 @@ instead.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:rebuild` | Rebuild the local validation DB and run the smoke test |
 | `npm run db:types` | Regenerate TypeScript types from a database |
+| `npm run db:concat` | Regenerate `supabase/ALL_MIGRATIONS.sql` after adding a migration |
 
 ## Layout
 
