@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Plus, Search } from "lucide-react";
+import { Archive, Users, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -16,6 +16,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ROW_LINK,
 } from "@/components/ui/table";
 
 export const metadata = { title: "Owners" };
@@ -23,16 +24,15 @@ export const metadata = { title: "Owners" };
 export default async function OwnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; show?: string }>;
 }) {
-  const profile = await requireCapability("owners.view");
   const params = await searchParams;
   const supabase = await createClient();
 
   let query = supabase
     .from("owners")
     .select("*, unit_ownerships(unit_id, ownership_pct, end_date), owner_users(profile_id)")
-    .eq("is_active", true)
+    .eq("is_active", params.show !== "archived")
     .order("full_name");
 
   if (params.q) {
@@ -41,7 +41,7 @@ export default async function OwnersPage({
     );
   }
 
-  const { data, error } = await query;
+  const [profile, { data, error }] = await Promise.all([requireCapability("owners.view"), query]);
   const owners = (data ?? []).map((owner) => ({
     ...owner,
     unitCount: (owner.unit_ownerships ?? []).filter((o) => o.end_date === null).length,
@@ -63,10 +63,20 @@ export default async function OwnersPage({
   return (
     <>
       <PageHeader
-        title="Owners"
-        description={`${owners.length} owner${owners.length === 1 ? "" : "s"} with property under management`}
+        title={params.show === "archived" ? "Archived owners" : "Owners"}
+        description={
+          params.show === "archived"
+            ? `${owners.length} archived owner${owners.length === 1 ? "" : "s"}. Open one to restore it.`
+            : `${owners.length} owner${owners.length === 1 ? "" : "s"} with property under management`
+        }
         actions={
           <>
+            <Button asChild variant="outline">
+              <Link href={params.show === "archived" ? "/owners" : "/owners?show=archived"}>
+                {params.show === "archived" ? <Users className="size-4" /> : <Archive className="size-4" />}
+                {params.show === "archived" ? "Active owners" : "Archived"}
+              </Link>
+            </Button>
             <ExportButton rows={exportRows} filename="drp-owners" />
             {can(profile.role, "owners.manage") && (
               <Button asChild>
@@ -90,6 +100,7 @@ export default async function OwnersPage({
               placeholder="Search by name, email or phone"
               className="pl-8"
             />
+            {params.show === "archived" && <input type="hidden" name="show" value="archived" />}
           </form>
         </CardContent>
       </Card>
@@ -123,11 +134,11 @@ export default async function OwnersPage({
             </TableHeader>
             <TableBody>
               {owners.map((owner) => (
-                <TableRow key={owner.id}>
+                <TableRow key={owner.id} className="relative cursor-pointer">
                   <TableCell>
                     <Link
                       href={`/owners/${owner.id}`}
-                      className="font-medium hover:underline"
+                      className={ROW_LINK}
                     >
                       {owner.full_name}
                     </Link>

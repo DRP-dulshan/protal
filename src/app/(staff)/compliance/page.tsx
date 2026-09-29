@@ -38,10 +38,8 @@ export default async function CompliancePage({
 }: {
   searchParams: Promise<{ kind?: string; severity?: string }>;
 }) {
-  await requireCapability("compliance.view");
   const params = await searchParams;
   const supabase = await createClient();
-  const settings = await getCompanySettings();
 
   let query = supabase
     .from("v_compliance_status")
@@ -51,7 +49,11 @@ export default async function CompliancePage({
   const kind = parseEnum(COMPLIANCE_KIND, params.kind);
   if (kind) query = query.eq("kind", kind);
 
-  const { data, error } = await query;
+  const [, settings, { data, error }] = await Promise.all([
+    requireCapability("compliance.view"),
+    getCompanySettings(),
+    query,
+  ]);
   const all = data ?? [];
 
   const filtered = params.severity

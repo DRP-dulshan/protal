@@ -35,6 +35,31 @@ export function portalForHost(
   return fallback === "admin" || fallback === "owner" ? fallback : null;
 }
 
+/**
+ * The portal a request belongs to, given its Host and X-Forwarded-Host
+ * headers.
+ *
+ * Host wins whenever it names a portal. X-Forwarded-Host is consulted only
+ * when it does not: when Next.js renders the page a Server Action redirects
+ * to (after signing in, say), it fetches that page from itself at
+ * `localhost:<port>` and carries the browser's hostname in X-Forwarded-Host.
+ * Reading Host alone put that render on no portal - a 404 straight after an
+ * owner signed in. A forwarded header can therefore never move a request
+ * that arrived on admin. or owner. to the other portal.
+ */
+export function portalForRequest(
+  host: string | null | undefined,
+  forwardedHost: string | null | undefined,
+  fallback?: string | null
+): Portal | null {
+  return (
+    portalForHost(host) ??
+    // A proxy chain can list several hosts; the first is the client's.
+    portalForHost(forwardedHost?.split(",")[0]?.trim()) ??
+    portalForHost(null, fallback)
+  );
+}
+
 /** Routes that exist on both hosts: sign-in, auth callbacks and the APIs. */
 const SHARED_PREFIXES = ["/login", "/auth", "/api"];
 

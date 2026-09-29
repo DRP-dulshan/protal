@@ -11,14 +11,12 @@ import { UNIT_KIND } from "@/lib/labels";
 export const metadata = { title: "My properties" };
 
 export default async function OwnerUnitsPage() {
-  await requireRole(["owner"]);
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("owner_units_view")
-    .select("*")
-    .eq("is_active", true)
-    .order("property_name");
+  const [, { data }] = await Promise.all([
+    requireRole(["owner"]),
+    supabase.from("owner_units_view").select("*").eq("is_active", true).order("property_name"),
+  ]);
 
   const units = data ?? [];
 

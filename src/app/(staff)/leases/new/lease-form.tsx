@@ -15,6 +15,7 @@ import { Callout } from "@/components/domain/shared";
 import { createLease, type ActionState } from "../actions";
 import { PAYMENT_METHOD, optionsFrom } from "@/lib/labels";
 import { formatAED } from "@/lib/money";
+import { AddTenantDialog } from "./add-tenant-dialog";
 
 /** Dubai convention: rent is split into 1, 2, 4, 6 or 12 cheques. */
 const INSTALLMENT_OPTIONS = [
@@ -49,6 +50,8 @@ export function LeaseForm({
   const [rent, setRent] = React.useState("");
   const [installments, setInstallments] = React.useState("4");
   const [startDate, setStartDate] = React.useState("");
+  const [tenantList, setTenantList] = React.useState(tenants);
+  const [tenantId, setTenantId] = React.useState("");
 
   React.useEffect(() => {
     if (state.error) toast.error(state.error);
@@ -95,19 +98,30 @@ export function LeaseForm({
             label: u.occupied ? `${u.label} (currently occupied)` : u.label,
           }))}
         />
-        <SelectField
-          name="tenantId"
-          label="Tenant"
-          required
-          placeholder={
-            tenants.length === 0 ? "No tenants on file yet" : "Select a tenant"
-          }
-          options={tenants.map((t) => ({
-            value: t.id,
-            label: t.is_company ? `${t.full_name} (company)` : t.full_name,
-          }))}
-          hint="Tenants are added from the tenancy record or the CRM."
-        />
+        <div className="flex flex-col gap-2">
+          <SelectField
+            name="tenantId"
+            label="Tenant"
+            required
+            value={tenantId}
+            onChange={(e) => setTenantId(e.target.value)}
+            placeholder={
+              tenantList.length === 0 ? "No tenants yet - add one below" : "Select a tenant"
+            }
+            options={tenantList.map((t) => ({
+              value: t.id,
+              label: t.is_company ? `${t.full_name} (company)` : t.full_name,
+            }))}
+          />
+          <AddTenantDialog
+            onCreated={(tenant) => {
+              setTenantList((list) =>
+                [...list, tenant].sort((a, b) => a.full_name.localeCompare(b.full_name))
+              );
+              setTenantId(tenant.id);
+            }}
+          />
+        </div>
       </FormSection>
 
       {selectedUnit?.occupied && (

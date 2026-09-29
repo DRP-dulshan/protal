@@ -331,14 +331,18 @@ const tenantSchema = z.object({
   employer: z.string().max(120).optional(),
 });
 
+export type TenantActionState = ActionState & {
+  tenant?: { id: string; full_name: string; is_company: boolean };
+};
+
 /**
  * Creates a tenant record. Kept separate from lease creation so the same
  * tenant can be reused across renewals and additional units.
  */
 export async function createTenant(
-  _prev: ActionState,
+  _prev: TenantActionState,
   formData: FormData
-): Promise<ActionState> {
+): Promise<TenantActionState> {
   const profile = await requireProfile();
   if (!can(profile.role, "leases.manage")) {
     return { error: "You do not have permission to add tenants." };
@@ -354,22 +358,26 @@ export async function createTenant(
   const input = parsed.data;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("tenants").insert({
-    is_company: input.isCompany,
-    full_name: input.fullName,
-    company_trade_licence: input.companyTradeLicence || null,
-    email: input.email || null,
-    phone: input.phone || null,
-    whatsapp: input.whatsapp || input.phone || null,
-    nationality: input.nationality || null,
-    emirates_id: input.emiratesId || null,
-    emirates_id_expiry: input.emiratesIdExpiry || null,
-    passport_number: input.passportNumber || null,
-    employer: input.employer || null,
-  });
+  const { data: tenant, error } = await supabase
+    .from("tenants")
+    .insert({
+      is_company: input.isCompany,
+      full_name: input.fullName,
+      company_trade_licence: input.companyTradeLicence || null,
+      email: input.email || null,
+      phone: input.phone || null,
+      whatsapp: input.whatsapp || input.phone || null,
+      nationality: input.nationality || null,
+      emirates_id: input.emiratesId || null,
+      emirates_id_expiry: input.emiratesIdExpiry || null,
+      passport_number: input.passportNumber || null,
+      employer: input.employer || null,
+    })
+    .select("id, full_name, is_company")
+    .single();
 
   if (error) return { error: error.message };
 
   revalidatePath("/leases/new");
-  return { success: `${input.fullName} added. Select them in the tenant list.` };
+  return { success: `${input.fullName} added.`, tenant };
 }

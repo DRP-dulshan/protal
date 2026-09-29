@@ -85,3 +85,44 @@ export function ListPageSkeleton({ rows = 6 }: { rows?: number }) {
     </>
   );
 }
+
+/** A record page: header, a card of fields, then a table. */
+export function DetailPageSkeleton() {
+  return (
+    <>
+      <PageHeaderSkeleton />
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <Shimmer className="h-3 w-20" />
+              <Shimmer className="h-4 w-32" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6">
+        <TableSkeleton rows={4} />
+      </div>
+    </>
+  );
+}
+
+/** A month calendar grid. */
+export function CalendarSkeleton() {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <Shimmer className="h-5 w-36" />
+        <Shimmer className="h-8 w-32" />
+      </div>
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-[var(--border)]">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div key={i} className="min-h-16 bg-[var(--card)] p-1 sm:min-h-20">
+            <Shimmer className="size-5 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

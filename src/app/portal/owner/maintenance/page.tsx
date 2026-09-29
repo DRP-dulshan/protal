@@ -15,14 +15,16 @@ import { MAINTENANCE_CATEGORY } from "@/lib/labels";
 export const metadata = { title: "Maintenance" };
 
 export default async function OwnerMaintenancePage() {
-  await requireRole(["owner"]);
   const supabase = await createClient();
-  const settings = await getPortalSettings();
 
-  const { data } = await supabase
-    .from("maintenance_requests")
-    .select("*, units(unit_number, properties(name)), vendors(name)")
-    .order("reported_at", { ascending: false });
+  const [, settings, { data }] = await Promise.all([
+    requireRole(["owner"]),
+    getPortalSettings(),
+    supabase
+      .from("maintenance_requests")
+      .select("*, units(unit_number, properties(name)), vendors(name)")
+      .order("reported_at", { ascending: false }),
+  ]);
 
   const tickets = data ?? [];
   const awaiting = tickets.filter(

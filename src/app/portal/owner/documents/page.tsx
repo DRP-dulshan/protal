@@ -6,16 +6,15 @@ import { DocumentList } from "@/components/domain/document-list";
 export const metadata = { title: "My documents" };
 
 export default async function OwnerDocumentsPage() {
-  await requireRole(["owner"]);
   const supabase = await createClient();
 
   // RLS returns only documents flagged owner-visible on units this login owns,
   // and never income records (statements, invoices, receipts, cheque copies,
   // tenancy contracts, Ejari certificates) - see pms.is_income_document().
-  const { data } = await supabase
-    .from("documents")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [, { data }] = await Promise.all([
+    requireRole(["owner"]),
+    supabase.from("documents").select("*").order("created_at", { ascending: false }),
+  ]);
 
   return (
     <>

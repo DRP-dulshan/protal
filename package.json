@@ -4,13 +4,17 @@
   "private": true,
   "description": "D|R|P Property Management System - Dubai",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:rebuild": "bash supabase/local/rebuild.sh",
     "db:types": "node scripts/gen-types.mjs",
+    "db:concat": "node scripts/concat-migrations.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:migrate": "node scripts/db-setup.mjs",
+    "db:cron": "node scripts/setup-cron.mjs",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/test-loader.mjs --test \"tests/**/*.test.ts\""
   },
   "dependencies": {

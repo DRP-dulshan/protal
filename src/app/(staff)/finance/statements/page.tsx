@@ -21,25 +21,20 @@ import { formatDate, formatPeriod } from "@/lib/dates";
 export const metadata = { title: "Owner statements" };
 
 export default async function StatementsPage() {
-  const profile = await requireCapability("statements.view");
   const supabase = await createClient();
 
-  const [statementsResult, ownersResult] = await Promise.all([
+  const [profile, statementsResult, ownersResult] = await Promise.all([
+    requireCapability("statements.view"),
     supabase
       .from("owner_statements")
       .select("*, owners(id, full_name)")
       .order("period_start", { ascending: false }),
-    can(profile.role, "statements.issue")
-      ? supabase
-          .from("owners")
-          .select("id, full_name")
-          .eq("is_active", true)
-          .order("full_name")
-      : Promise.resolve({ data: [], error: null }),
+    supabase.from("owners").select("id, full_name").eq("is_active", true).order("full_name"),
   ]);
 
   const statements = statementsResult.data ?? [];
-  const owners = ownersResult.data ?? [];
+  // Only used by the generate dialog, which only issuers see.
+  const owners = can(profile.role, "statements.issue") ? (ownersResult.data ?? []) : [];
 
   const exportRows = statements.map((s) => ({
     Statement: s.statement_number,

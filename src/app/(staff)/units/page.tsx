@@ -20,6 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ROW_LINK,
 } from "@/components/ui/table";
 import {
   UNIT_KIND,
@@ -35,16 +36,21 @@ export const metadata = { title: "Units" };
 export default async function UnitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; mode?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    mode?: string;
+    show?: string;
+    permit?: string;
+  }>;
 }) {
-  const profile = await requireCapability("units.view");
   const params = await searchParams;
   const supabase = await createClient();
 
   let query = supabase
     .from("v_units_overview")
     .select("*")
-    .eq("is_active", true)
+    .eq("is_active", params.show !== "archived")
     .order("property_name")
     .order("unit_number");
 
@@ -54,6 +60,12 @@ export default async function UnitsPage({
   const mode = parseEnum(OPERATING_MODE, params.mode);
   if (status) query = query.eq("status", status);
   if (mode) query = query.eq("operating_mode", mode);
+  // Holiday home and dual-mode units letting without a live DET permit - the
+  // dashboard's permit warning links here.
+  const permitMissing = params.permit === "missing";
+  if (permitMissing) {
+    query = query.in("operating_mode", ["short_term", "both"]).eq("has_valid_permit", false);
+  }
   if (params.q) {
     const term = `%${params.q}%`;
     query = query.or(
@@ -61,7 +73,7 @@ export default async function UnitsPage({
     );
   }
 
-  const { data: units, error } = await query;
+  const [profile, { data: units, error }] = await Promise.all([requireCapability("units.view"), query]);
   const rows = units ?? [];
 
   const exportRows = rows.map((u) => ({
@@ -83,7 +95,11 @@ export default async function UnitsPage({
     <>
       <PageHeader
         title="Units"
-        description={`${rows.length} unit${rows.length === 1 ? "" : "s"} under management`}
+        description={
+          params.show === "archived"
+            ? `${rows.length} archived unit${rows.length === 1 ? "" : "s"}`
+            : `${rows.length} unit${rows.length === 1 ? "" : "s"} under management`
+        }
         actions={
           <>
             <ExportButton rows={exportRows} filename="drp-units" />
@@ -127,10 +143,23 @@ export default async function UnitsPage({
                 </option>
               ))}
             </Select>
+            <Select name="show" defaultValue={params.show ?? ""} className="sm:w-40">
+              <option value="">Active units</option>
+              <option value="archived">Archived units</option>
+            </Select>
+            {permitMissing && <input type="hidden" name="permit" value="missing" />}
             <Button type="submit" variant="secondary">
               Filter
             </Button>
           </form>
+          {permitMissing && (
+            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+              Showing holiday home and dual-mode units without a valid DET permit.{" "}
+              <Link href="/units" className="underline underline-offset-2">
+                Show all units
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -168,11 +197,11 @@ export default async function UnitsPage({
             </TableHeader>
             <TableBody>
               {rows.map((unit) => (
-                <TableRow key={unit.id}>
+                <TableRow key={unit.id} className="relative cursor-pointer">
                   <TableCell>
                     <Link
                       href={`/units/${unit.id}`}
-                      className="font-medium hover:underline"
+                      className={ROW_LINK}
                     >
                       {unit.property_name} · {unit.unit_number}
                     </Link>

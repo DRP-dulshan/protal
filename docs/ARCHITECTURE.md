@@ -306,6 +306,14 @@ Hosting the project near the operator - `ap-south-1` (Mumbai) or
 40-60 ms and pages to roughly 200 ms. A project's region cannot be changed after
 creation, so this is worth getting right before go-live.
 
+**Current setup:** Supabase in `ap-south-1` (Mumbai), Vercel functions in `bom1`
+(Mumbai, `vercel.json`), so the server and the database sit in the same region.
+Measured from Dubai when the project moved from `ap-southeast-2` (Sydney): one
+round trip 409 ms -> 65 ms; the unit page's full data batch ~400 ms (spikes over
+1 s) -> ~80-140 ms. Pages also send all their queries as one parallel batch, so
+each page costs a single round trip. `scripts/copy-supabase-project.mjs` is how
+the data was moved, and can move it again.
+
 Two fixes already applied:
 
 - `current_profile()` (migration 0013) returns the signed-in user's profile in

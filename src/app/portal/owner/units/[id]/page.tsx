@@ -20,7 +20,6 @@ export default async function OwnerUnitPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ month?: string }>;
 }) {
-  await requireRole(["owner"]);
   const { id } = await params;
   const { month: monthParam } = await searchParams;
   if (!z.string().uuid().safeParse(id).success) notFound();
@@ -32,11 +31,12 @@ export default async function OwnerUnitPage({
   const today = dubaiToday();
 
   const supabase = await createClient();
-  const settings = await getPortalSettings();
 
   // All three are owner-safe views: a unit that is not the caller's simply
   // returns no row, so there is no ownership check to get wrong here.
-  const [unitResult, calendarResult, blocksResult, listResult] = await Promise.all([
+  const [, settings, unitResult, calendarResult, blocksResult, listResult] = await Promise.all([
+    requireRole(["owner"]),
+    getPortalSettings(),
     supabase.from("owner_units_view").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("owner_bookings_view")

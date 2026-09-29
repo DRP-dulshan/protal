@@ -1,6 +1,7 @@
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileSignature, Plus, ShieldAlert } from "lucide-react";
+import { CalendarPlus, FileSignature, Pencil, Plus, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -35,6 +36,21 @@ import { DocumentList } from "@/components/domain/document-list";
 import { formatDate } from "@/lib/dates";
 import { formatPercent } from "@/lib/money";
 import { UNIT_KIND, FURNISHING, COMPLIANCE_KIND } from "@/lib/labels";
+import { RecordActions } from "@/components/domain/record-actions";
+import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
+import { PermitDialog } from "./permit-dialog";
+import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
+import { ChannelSync } from "./channel-sync";
+import { env } from "@/lib/env";
+import { BookingCalendar } from "@/components/domain/booking-calendar";
+import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
+
+/** Shared by the page and its metadata, so the overview row is fetched once. */
+const getOverview = cache(async (id: string) => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("v_units_overview").select("*").eq("id", id).maybeSingle();
+  return data;
+});
 
 export async function generateMetadata({
   params,
@@ -42,13 +58,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("v_units_overview")
-    .select("unit_number, property_name")
-    .eq("id", id)
-    .maybeSingle();
-
+  const data = await getOverview(id);
   return {
     title: data ? `${data.property_name} ${data.unit_number}` : "Unit",
   };
@@ -56,31 +66,44 @@ export async function generateMetadata({
 
 export default async function UnitDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; month?: string }>;
 }) {
   const { id } = await params;
-  const profile = await requireCapability("units.view");
+  const { tab, month: monthParam } = await searchParams;
+  const month = parseMonth(monthParam);
+  const grid = monthGrid(month);
+  const gridStart = grid[0][0];
+  const gridEnd = grid[grid.length - 1][6];
   const supabase = await createClient();
 
-  const { data: unit } = await supabase
-    .from("units")
-    .select("*, properties(id, name, kind, community_id, communities(name, emirate))")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!unit) notFound();
-
+  // Everything in one batch: all of it is keyed by the unit id from the URL,
+  // and RLS guards each query, so nothing needs to wait for the profile or
+  // the unit row. From Dubai to the database region each extra sequential
+  // step costs a full round trip.
   const [
-    overviewResult,
+    profile,
+    { data: unit },
+    overview,
     ownershipResult,
     leasesResult,
     permitResult,
     complianceResult,
     documentsResult,
     agreementResult,
+    staysResult,
+    blocksResult,
+    flaggedResult,
   ] = await Promise.all([
-    supabase.from("v_units_overview").select("*").eq("id", id).maybeSingle(),
+    requireCapability("units.view"),
+    supabase
+      .from("units")
+      .select("*, properties(id, name, kind, community_id, communities(name, emirate))")
+      .eq("id", id)
+      .maybeSingle(),
+    getOverview(id),
     supabase
       .from("unit_ownerships")
       .select("*, owners(id, full_name, email, phone, is_company)")
@@ -113,15 +136,51 @@ export default async function UnitDetailPage({
       .eq("unit_id", id)
       .eq("is_active", true)
       .maybeSingle(),
+    supabase
+      .from("bookings")
+      .select("id, check_in, check_out, channel, status, guests(full_name)")
+      .eq("unit_id", id)
+      .in("status", ["inquiry", "tentative", "confirmed", "checked_in", "checked_out"])
+      .lte("check_in", gridEnd)
+      .gt("check_out", gridStart),
+    supabase
+      .from("availability_blocks")
+      .select("id, start_date, end_date, reason, note")
+      .eq("unit_id", id)
+      .neq("reason", "booking")
+      .gt("end_date", dubaiToday() < gridStart ? dubaiToday() : gridStart)
+      .order("start_date"),
+    // Upcoming Airbnb stays imported while the unit had no DET permit.
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", id)
+      .eq("imported_without_permit", true)
+      .in("status", ["confirmed", "checked_in"])
+      .gt("check_out", dubaiToday()),
   ]);
 
-  const overview = overviewResult.data;
+  if (!unit) notFound();
+
   const ownerships = ownershipResult.data ?? [];
   const leases = leasesResult.data ?? [];
   const permits = permitResult.data ?? [];
   const compliance = complianceResult.data ?? [];
   const documents = documentsResult.data ?? [];
   const agreement = agreementResult.data;
+  const stays = (staysResult.data ?? []).map((b) => ({
+    id: b.id,
+    checkIn: b.check_in,
+    checkOut: b.check_out,
+    source: b.channel,
+    label: b.guests?.full_name ?? null,
+    pending: b.status === "inquiry" || b.status === "tentative",
+    href: `/bookings/${b.id}`,
+  }));
+  const holds = blocksResult.data ?? [];
+  const today = dubaiToday();
+  // Airbnb's own "not available" periods are managed by the sync, not by hand.
+  const upcomingHolds = holds.filter((h) => h.end_date > today && h.reason !== "channel_sync");
 
   const activeLease = leases.find(
     (l) => l.status === "active" || l.status === "expiring"
@@ -130,6 +189,13 @@ export default async function UnitDetailPage({
   const isShortTerm =
     unit.operating_mode === "short_term" || unit.operating_mode === "both";
   const hasValidPermit = overview?.has_valid_permit ?? false;
+  const lastSynced = unit.ical_last_synced_at
+    ? new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Dubai",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(unit.ical_last_synced_at))
+    : null;
 
   return (
     <>
@@ -146,7 +212,37 @@ export default async function UnitDetailPage({
         ]
           .filter(Boolean)
           .join(" · ")}
+        actions={
+          can(profile.role, "units.manage") ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/units/${unit.id}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+              <RecordActions
+                noun="unit"
+                idName="unitId"
+                id={unit.id}
+                isActive={unit.is_active}
+                archive={archiveUnit}
+                restore={restoreUnit}
+                remove={profile.role === "super_admin" ? deleteUnit : undefined}
+              />
+            </>
+          ) : undefined
+        }
       />
+
+      {!unit.is_active && (
+        <div className="mb-5">
+          <Callout tone="warning" title="This unit is archived">
+            It is hidden from lists, the dashboard and reports. Its history is kept.
+            Restore it to put it back under management.
+          </Callout>
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <UnitStatusBadge status={unit.status} />
@@ -205,10 +301,15 @@ export default async function UnitDetailPage({
         </Card>
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs
+        defaultValue={
+          tab && ["tenancy", "calendar", "permits", "documents"].includes(tab) ? tab : "overview"
+        }
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenancy">Tenancy</TabsTrigger>
+          {isShortTerm && <TabsTrigger value="calendar">Calendar</TabsTrigger>}
           {isShortTerm && <TabsTrigger value="permits">DET permits</TabsTrigger>}
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
         </TabsList>
@@ -385,10 +486,98 @@ export default async function UnitDetailPage({
         </TabsContent>
 
         {isShortTerm && (
+          <>
+          <TabsContent value="calendar">
+            <ChannelSync
+              unitId={unit.id}
+              airbnbUrl={unit.airbnb_ical_url}
+              exportUrl={`${env.adminUrl}/api/ical/${unit.ical_export_token}.ics`}
+              lastSynced={lastSynced}
+              status={unit.ical_last_status}
+              error={unit.ical_last_error}
+              eventCount={unit.ical_last_event_count}
+              flaggedCount={hasValidPermit ? 0 : (flaggedResult.count ?? 0)}
+              canManage={can(profile.role, "bookings.manage")}
+            />
+            <Card className="mb-5">
+              <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base">Availability</CardTitle>
+                {can(profile.role, "bookings.manage") && (
+                  <div className="flex flex-wrap gap-2">
+                    <BlockDatesDialog unitId={unit.id} />
+                    <Button asChild size="sm">
+                      <Link href={`/bookings/new?unit=${unit.id}`}>
+                        <CalendarPlus className="size-4" />
+                        New booking
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <BookingCalendar
+                  month={month}
+                  stays={stays}
+                  blocks={holds.map((h) => ({
+                    id: h.id,
+                    start: h.start_date,
+                    end: h.end_date,
+                    reason: h.reason,
+                  }))}
+                  monthHref={(m) => `/units/${unit.id}?tab=calendar&month=${m}`}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Blocked dates</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {upcomingHolds.length === 0 ? (
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    No upcoming owner stays, maintenance or other blocks.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {upcomingHolds.map((h) => (
+                      <li
+                        key={h.id}
+                        className="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0 text-sm">
+                          <span className="font-medium">
+                            {h.reason === "owner_stay"
+                              ? "Owner stay"
+                              : h.reason === "maintenance"
+                                ? "Maintenance"
+                                : "Blocked"}
+                          </span>
+                          <span className="tabular ml-2 text-[var(--muted-foreground)]">
+                            {formatDate(h.start_date)} → {formatDate(h.end_date)}
+                          </span>
+                          {h.note && (
+                            <p className="truncate text-xs text-[var(--muted-foreground)]">{h.note}</p>
+                          )}
+                        </div>
+                        {can(profile.role, "bookings.manage") && (
+                          <RemoveBlockButton blockId={h.id} unitId={unit.id} />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="permits">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle className="text-base">DET holiday home permits</CardTitle>
+                {can(profile.role, "permits.manage") && (
+                  <PermitDialog unitId={unit.id} hasPermit={permits.length > 0} />
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {permits.length === 0 ? (
@@ -436,6 +625,7 @@ export default async function UnitDetailPage({
               </CardContent>
             </Card>
           </TabsContent>
+          </>
         )}
 
         <TabsContent value="documents">

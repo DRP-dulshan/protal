@@ -27,7 +27,6 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; direction?: string }>;
 }) {
-  await requireCapability("finance.view");
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -51,7 +50,7 @@ export default async function FinancePage({
     query = query.eq("direction", params.direction);
   }
 
-  const { data, error } = await query;
+  const [, { data, error }] = await Promise.all([requireCapability("finance.view"), query]);
   const entries = data ?? [];
 
   const income = entries

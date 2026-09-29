@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability, getCompanySettings } from "@/lib/auth/session";
@@ -7,18 +8,24 @@ import { StatementStatusBadge } from "@/components/domain/status-badge";
 import { StatementDocument } from "@/components/domain/statement-document";
 import { StatementActions } from "./statement-actions";
 
+/** Shared by the page and its metadata, so the statement is fetched once. */
+const getStatement = cache(async (id: string) => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("owner_statements")
+    .select("*, owners(id, full_name, email, phone, address_line, trn)")
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+});
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("owner_statements")
-    .select("statement_number")
-    .eq("id", id)
-    .maybeSingle();
+  const data = await getStatement(id);
   return { title: data?.statement_number ?? "Statement" };
 }
 
@@ -28,23 +35,20 @@ export default async function StatementDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profile = await requireCapability("statements.view");
   const supabase = await createClient();
-  const settings = await getCompanySettings();
 
-  const { data: statement } = await supabase
-    .from("owner_statements")
-    .select("*, owners(id, full_name, email, phone, address_line, trn)")
-    .eq("id", id)
-    .maybeSingle();
+  const [profile, settings, statement, { data: lines }] = await Promise.all([
+    requireCapability("statements.view"),
+    getCompanySettings(),
+    getStatement(id),
+    supabase
+      .from("owner_statement_lines")
+      .select("*")
+      .eq("statement_id", id)
+      .order("sort_order"),
+  ]);
 
   if (!statement) notFound();
-
-  const { data: lines } = await supabase
-    .from("owner_statement_lines")
-    .select("*")
-    .eq("statement_id", id)
-    .order("sort_order");
 
   return (
     <>

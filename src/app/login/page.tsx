@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Logo } from "@/components/layout/logo";
 import { isConfigured } from "@/lib/env";
 import { getProfile } from "@/lib/auth/session";
 import { PORTAL_LABEL, portalHome, roleAllowedOnPortal } from "@/lib/portal";
@@ -22,6 +22,8 @@ const ERRORS: Record<string, string> = {
     "This account cannot sign in here. Owners use the owner portal; " +
     "D|R|P staff use the admin portal.",
   no_access: "This account does not have portal access. Contact your property manager.",
+  link_invalid:
+    "That link has expired or has already been used. Ask D|R|P to send you a new one.",
   unavailable:
     "The service is temporarily unavailable, so we could not check your sign-in. " +
     "Your details are fine - please try again shortly.",
@@ -49,14 +51,10 @@ export default async function LoginPage({
     <main className="flex min-h-dvh items-center justify-center bg-[var(--muted)] p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-[var(--primary)]">
-            <Building2 className="size-6 text-[var(--primary-foreground)]" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            D<span className="text-[var(--brand)]">|</span>R
-            <span className="text-[var(--brand)]">|</span>P
+          <h1 className="w-full">
+            <Logo variant="white" className="rounded-xl px-10 py-8" imageClassName="w-48" priority />
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
             {PORTAL_LABEL[portal]}
           </p>
         </div>
@@ -107,7 +105,7 @@ export default async function LoginPage({
 
         <p className="mt-4 text-center text-xs text-[var(--muted-foreground)]">
           {portal === "owner" ? (
-            "New here? Use the invitation email from D|R|P to set your password."
+            "New here, or forgot your password? Ask D|R|P for a sign-in link."
           ) : (
             <Link href="/setup" className="underline underline-offset-2">
               Setup guide

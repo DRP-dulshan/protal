@@ -52,9 +52,10 @@ function accessTokenExpiry(request: NextRequest): number | null {
  * Refreshes the Supabase session cookie when it is close to expiring, and gates
  * the authenticated surface.
  *
- * `auth.getUser()` costs a full round trip to Supabase. Doing it on every
- * request added ~100 ms to every page for no benefit while the token was still
- * valid, so it now runs only when a refresh is actually due.
+ * Any call to Supabase Auth costs a full round trip to the project's region.
+ * Doing it on every request added a round trip to every page for no benefit
+ * while the token was still valid, so it now runs only when a refresh is
+ * actually due - and then as a single call.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -69,17 +70,23 @@ export async function updateSession(request: NextRequest) {
   if (!url || !key) return response;
 
   const path = request.nextUrl.pathname;
+
+  // Machine endpoints (scheduler, website API, iCal feeds) never carry a
+  // browser session and authenticate themselves (CRON_SECRET, CORS and rate
+  // limits, secret feed tokens); skip the session logic for them entirely.
+  if (
+    path.startsWith("/api/cron/") ||
+    path.startsWith("/api/public/") ||
+    path.startsWith("/api/ical/") ||
+    path.startsWith("/api/keep-alive")
+  ) {
+    return response;
+  }
+
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
     path.startsWith("/setup") ||
-    // Scheduled jobs carry no session; they authenticate with CRON_SECRET.
-    path.startsWith("/api/keep-alive") ||
-    path.startsWith("/api/cron/") ||
-    // The website's booking API and the iCal export are unauthenticated by
-    // design; they enforce their own checks (CORS, rate limits, secret token).
-    path.startsWith("/api/public/") ||
-    path.startsWith("/api/ical/") ||
     path === "/";
 
   const exp = accessTokenExpiry(request);
@@ -102,11 +109,16 @@ export async function updateSession(request: NextRequest) {
       },
     });
 
+    // getSession() renews an expiring token in one round trip; getUser()
+    // would add a second one to re-fetch the user. The result only decides
+    // whether to send the visitor to /login - it is never an authorisation
+    // decision, because PostgREST verifies the JWT on every query and RLS
+    // decides the row set.
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (!user && !isPublic) {
+    if (!session && !isPublic) {
       const redirect = request.nextUrl.clone();
       redirect.pathname = "/login";
       redirect.searchParams.set("next", path);

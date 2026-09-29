@@ -31,15 +31,15 @@ export const metadata = { title: "My portfolio" };
  * here goes through an owner-safe view or a table that carries no revenue.
  */
 export default async function OwnerPortalPage() {
-  const profile = await requireRole(["owner"]);
   const supabase = await createClient();
-  const settings = await getPortalSettings();
 
   const today = dubaiToday();
   const { start: monthStart, end: monthEnd } = monthRange(today.slice(0, 7));
 
-  const [unitsResult, bookingsResult, complianceResult, maintenanceResult] =
+  const [profile, settings, unitsResult, bookingsResult, complianceResult, maintenanceResult] =
     await Promise.all([
+      requireRole(["owner"]),
+      getPortalSettings(),
       supabase.from("owner_units_view").select("*").eq("is_active", true).order("property_name"),
       supabase
         .from("owner_bookings_view")

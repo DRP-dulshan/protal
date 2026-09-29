@@ -23,13 +23,11 @@ export default async function OwnerBookingsPage({
 }: {
   searchParams: Promise<{ view?: string; unit?: string }>;
 }) {
-  await requireRole(["owner"]);
   const params = await searchParams;
   const view: View = params.view && params.view in VIEWS ? (params.view as View) : "upcoming";
   const today = dubaiToday();
 
   const supabase = await createClient();
-  const settings = await getPortalSettings();
 
   // The view only ever returns the caller's own units, so an arbitrary id here
   // can narrow the list but never widen it.
@@ -41,7 +39,9 @@ export default async function OwnerBookingsPage({
   else if (view === "past") query = query.lte("check_out", today).order("check_in", { ascending: false });
   else query = query.order("check_in", { ascending: false });
 
-  const [{ data: bookings }, { data: units }] = await Promise.all([
+  const [, settings, { data: bookings }, { data: units }] = await Promise.all([
+    requireRole(["owner"]),
+    getPortalSettings(),
     query.limit(500),
     supabase.from("owner_units_view").select("id, property_name, unit_number").order("property_name"),
   ]);

@@ -17,12 +17,23 @@ cp .env.example .env.local     # fill in your Supabase values
 npm run dev
 ```
 
+Open http://localhost:3000 (or http://admin.localhost:3000) for the back
+office and http://owner.localhost:3000 for the owner portal.
+
 Without credentials the app serves `/setup`, which lists exactly what is
 missing — it will not crash with a stack trace.
 
 ### Database
 
-Apply the migrations in `supabase/migrations/` in filename order, via the
+Put your Supabase connection string in `DATABASE_URL` in `.env.local`
+(Supabase → Connect → Session pooler), then install the schema and the demo
+data in one step:
+
+```bash
+npm run db:setup -- --seed
+```
+
+Or apply the migrations in `supabase/migrations/` in filename order, via the
 Supabase SQL editor or the CLI:
 
 ```bash
@@ -83,6 +94,8 @@ instead.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:rebuild` | Rebuild the local validation DB and run the smoke test |
 | `npm run db:types` | Regenerate TypeScript types from a database |
+| `npm run db:setup -- --seed` | Install the schema and demo data into the database in `DATABASE_URL` |
+| `npm run db:concat` | Regenerate `supabase/ALL_MIGRATIONS.sql` after adding a migration |
 
 ## Layout
 
@@ -101,12 +114,17 @@ Dubai-specific rules the database enforces.
 
 ## Status
 
-**Phase 1 is complete end to end** — including create forms for properties,
-units, owners and tenancies, the owner portal, and minimal read-only portals for
-tenants and guests. Edit forms are the one gap: records are created in the app
-and amended in the database for now.
+**Phase 1 is complete end to end** — including create and edit forms for
+properties, units and owners, create forms for tenants and tenancies, the owner
+portal, and minimal read-only portals for tenants and guests. Properties, units
+and owners are archived rather than deleted once they have history; a record
+entered by mistake and with no history can be deleted by a super admin.
+Tenancies are created in the app and amended in the database for now.
 
 Phase 2's data model (Holiday Homes, DET permits, bookings, housekeeping,
 maintenance, communications) is fully built, constrained, RLS-protected and
-seeded; only its back-office screens remain, and they need no migration.
+seeded. Holiday homes have their back-office screens: bookings (list, new,
+confirm / check in / check out / cancel), DET permits and a per-unit calendar
+with blocked dates. Housekeeping, maintenance and communications screens
+remain, and need no migration.
 Phase 3 has integration points reserved.

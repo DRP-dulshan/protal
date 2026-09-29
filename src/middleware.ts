@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { isPathAllowed, portalForHost } from "@/lib/portal";
+import { isPathAllowed, portalForRequest } from "@/lib/portal";
 import { env } from "@/lib/env";
 
 export async function middleware(request: NextRequest) {
-  const portal = portalForHost(request.headers.get("host"), env.portalFallback);
+  const portal = portalForRequest(
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+    env.portalFallback
+  );
 
   // Decided before any Supabase call: a path that does not belong on this host
   // costs nothing and reveals nothing. Rewriting to a route that does not exist
