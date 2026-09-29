@@ -28,6 +28,7 @@ export const STAFF_NAV: NavSection[] = [
     label: "Overview",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard", capability: "units.view" },
+      { label: "Notifications", href: "/notifications", icon: "Bell", capability: "units.view" },
       { label: "Compliance", href: "/compliance", icon: "ShieldCheck", capability: "compliance.view" },
     ],
   },
@@ -77,6 +78,7 @@ export const OWNER_NAV: NavSection[] = [
     label: "My portfolio",
     items: [
       { label: "Overview", href: "/portal/owner", icon: "LayoutDashboard", capability: "units.view" },
+      { label: "Notifications", href: "/portal/owner/notifications", icon: "Bell", capability: "units.view" },
       { label: "My properties", href: "/portal/owner/units", icon: "Building2", capability: "units.view" },
       { label: "Bookings", href: "/portal/owner/bookings", icon: "CalendarDays", capability: "bookings.view" },
       { label: "Maintenance", href: "/portal/owner/maintenance", icon: "Wrench", capability: "maintenance.view" },

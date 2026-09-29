@@ -2561,6 +2561,67 @@ export type Database = {
           },
         ];
       };
+      notifications: {
+        Row: {
+          id: string;
+          recipient_id: string;
+          kind: string;
+          title: string;
+          body: string;
+          link: string | null;
+          booking_id: string | null;
+          unit_id: string | null;
+          created_at: string;
+          read_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          recipient_id: string;
+          kind: string;
+          title: string;
+          body: string;
+          link?: string | null;
+          booking_id?: string | null;
+          unit_id?: string | null;
+          created_at?: string;
+          read_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          recipient_id?: string;
+          kind?: string;
+          title?: string;
+          body?: string;
+          link?: string | null;
+          booking_id?: string | null;
+          unit_id?: string | null;
+          created_at?: string;
+          read_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_recipient_id_fkey";
+            columns: ["recipient_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       owner_bank_accounts: {
         Row: {
           id: string;

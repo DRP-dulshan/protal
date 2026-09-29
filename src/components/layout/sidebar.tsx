@@ -22,11 +22,14 @@ export function Sidebar({
   role,
   userName,
   signOutAction,
+  badges = {},
 }: {
   sections: NavSection[];
   role: Role;
   userName: string;
   signOutAction: () => Promise<void>;
+  /** Counts shown beside nav items, keyed by href (e.g. unread notifications). */
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
@@ -75,6 +78,14 @@ export function Sidebar({
                   >
                     <Icon name={item.icon} className="size-4 shrink-0" />
                     <span className="truncate">{item.label}</span>
+                    {(badges[item.href] ?? 0) > 0 && (
+                      <span
+                        className="ml-auto rounded-full bg-[var(--destructive)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--destructive-foreground)]"
+                        aria-label={`${badges[item.href]} unread`}
+                      >
+                        {badges[item.href]! > 99 ? "99+" : badges[item.href]}
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}

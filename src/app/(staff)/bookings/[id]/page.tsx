@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
 import { SALES_CHANNEL } from "@/lib/labels";
 import { BookingActions } from "./booking-actions";
+import { PriceDialog } from "./price-dialog";
 
 export const metadata = { title: "Booking" };
 
@@ -123,8 +124,22 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
+          <CardHeader className="flex-row items-center justify-between gap-2 pb-3">
             <CardTitle className="text-base">Price</CardTitle>
+            {can(profile.role, "bookings.manage") && (
+              <PriceDialog
+                bookingId={b.id}
+                isAirbnb={b.channel === "airbnb"}
+                needsGuest={!b.guests}
+                current={{
+                  accommodation: Number(b.accommodation_aed),
+                  cleaning: Number(b.cleaning_fee_aed),
+                  extra: Number(b.extra_fees_aed),
+                  tourism: Number(b.tourism_dirham_aed),
+                  commission: Number(b.channel_commission_aed),
+                }}
+              />
+            )}
           </CardHeader>
           <CardContent>
             <FieldGrid columns={3}>

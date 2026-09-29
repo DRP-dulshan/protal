@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { dubaiToday, nightsBetween } from "@/lib/calendar";
+import { flushEmailsSoon } from "@/lib/notify/flush";
+import { earningsToBookingAmounts, parseAirbnbEarnings } from "@/lib/airbnb/earnings-csv";
 
 export type ActionState = { error?: string; success?: string };
 
@@ -240,6 +242,7 @@ export async function createBooking(
 
   if (error) return { error: explain(error) };
 
+  flushEmailsSoon();
   revalidatePath("/bookings");
   revalidatePath(`/units/${input.unitId}`);
   redirect(`/bookings/${booking.id}`);
@@ -306,6 +309,7 @@ export async function changeBookingStatus(
   if (error) return { error: explain(error) };
   if (!changed?.length) return { error: "This booking could not be changed." };
 
+  flushEmailsSoon();
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath(`/units/${booking.unit_id}`);
@@ -405,4 +409,166 @@ export async function removeBlock(
 
   revalidatePath(`/units/${parsed.data.unitId}`);
   return { success: "Block removed. The dates are free again." };
+}
+
+// ---------------------------------------------------------------------------
+// Prices: Airbnb stays arrive from the calendar feed with dates only.
+// ---------------------------------------------------------------------------
+
+const priceSchema = z.object({
+  accommodation: money,
+  cleaningFee: money.default(0),
+  extraFees: money.default(0),
+  tourismDirham: money.default(0),
+  channelCommission: money.default(0),
+  guestName: z.string().trim().max(160).optional(),
+});
+
+/** Enters or corrects a booking's price. The payout is always derived. */
+export async function updateBookingPrice(
+  bookingId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) {
+    return { error: "You do not have permission to change booking prices." };
+  }
+  if (!z.string().uuid().safeParse(bookingId).success) return { error: "Booking not found." };
+
+  const parsed = priceSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the amounts and try again." };
+  }
+  const input = parsed.data;
+  const supabase = await createClient();
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, unit_id, check_in, check_out, guest_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { error: "Booking not found." };
+
+  let guestId = booking.guest_id;
+  if (!guestId && input.guestName && input.guestName.length >= 2) {
+    const { data: guest, error: guestError } = await supabase
+      .from("guests")
+      .insert({ full_name: input.guestName })
+      .select("id")
+      .single();
+    if (guestError) return { error: `Could not save the guest: ${guestError.message}` };
+    guestId = guest.id;
+  }
+
+  const nights = nightsBetween(booking.check_in, booking.check_out);
+  const gross = round2(input.accommodation + input.cleaningFee + input.extraFees + input.tourismDirham);
+  const { data: changed, error } = await supabase
+    .from("bookings")
+    .update({
+      guest_id: guestId,
+      accommodation_aed: input.accommodation,
+      nightly_rate_aed: nights > 0 ? round2(input.accommodation / nights) : null,
+      cleaning_fee_aed: input.cleaningFee,
+      extra_fees_aed: input.extraFees,
+      tourism_dirham_aed: input.tourismDirham,
+      channel_commission_aed: input.channelCommission,
+      gross_total_aed: gross,
+      payout_expected_aed: round2(gross - input.channelCommission - input.tourismDirham),
+    })
+    .eq("id", bookingId)
+    .select("id");
+  if (error) return { error: explain(error) };
+  if (!changed?.length) return { error: "This booking could not be changed." };
+
+  revalidatePath("/bookings");
+  revalidatePath(`/bookings/${bookingId}`);
+  return { success: "Price saved." };
+}
+
+export type ImportState = ActionState & {
+  updated?: number;
+  notFound?: string[];
+  otherCurrency?: string[];
+  skipped?: Record<string, number>;
+};
+
+/**
+ * Airbnb's earnings export -> booking prices, matched on the confirmation
+ * code the calendar sync stores in external_booking_id. Re-importing the same
+ * file sets the same values again, so it is safe to repeat.
+ */
+export async function importAirbnbEarnings(
+  _prev: ImportState,
+  formData: FormData
+): Promise<ImportState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) {
+    return { error: "You do not have permission to import earnings." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file first." };
+  if (file.size > 5_000_000) return { error: "That file is too large for an earnings export." };
+
+  const { reservations, skipped, errors } = parseAirbnbEarnings(await file.text());
+  if (errors.length) return { error: errors[0] };
+  if (reservations.length === 0) {
+    return { error: "No reservations found in this file.", skipped };
+  }
+
+  const supabase = await createClient();
+  const { data: bookings, error } = await supabase
+    .from("bookings")
+    .select("id, external_booking_id, check_in, check_out, guest_id")
+    .eq("channel", "airbnb")
+    .in("external_booking_id", reservations.map((r) => r.code));
+  if (error) return { error: error.message };
+
+  const byCode = new Map((bookings ?? []).map((b) => [b.external_booking_id!.toUpperCase(), b]));
+  const notFound: string[] = [];
+  const otherCurrency: string[] = [];
+  let updated = 0;
+
+  for (const r of reservations) {
+    const booking = byCode.get(r.code);
+    if (!booking) {
+      notFound.push(r.code);
+      continue;
+    }
+    // Amounts are kept in AED; a payout in another currency needs a rate.
+    if (r.currency && r.currency !== "AED") {
+      otherCurrency.push(`${r.code} (${r.currency})`);
+      continue;
+    }
+
+    let guestId = booking.guest_id;
+    if (!guestId && r.guest) {
+      const { data: guest } = await supabase
+        .from("guests")
+        .insert({ full_name: r.guest })
+        .select("id")
+        .single();
+      guestId = guest?.id ?? null;
+    }
+
+    const { data: changed } = await supabase
+      .from("bookings")
+      .update({
+        guest_id: guestId,
+        ...earningsToBookingAmounts(r, nightsBetween(booking.check_in, booking.check_out)),
+      })
+      .eq("id", booking.id)
+      .select("id");
+    if (changed?.length) updated++;
+  }
+
+  revalidatePath("/bookings");
+  return {
+    success: `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
+    updated,
+    notFound,
+    otherCurrency,
+    skipped,
+  };
 }
