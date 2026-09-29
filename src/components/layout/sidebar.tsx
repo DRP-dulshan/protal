@@ -44,8 +44,13 @@ export function Sidebar({
     }))
     .filter((section) => section.items.length > 0);
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+  // The deepest item containing the current page is the active one, so a
+  // portal's home (/portal/owner) does not light up on every page under it.
+  const hrefs = visible.flatMap((section) => section.items.map((item) => item.href));
+  const activeHref = hrefs
+    .filter((href) => pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === activeHref;
 
   const nav = (
     <nav className="flex h-full flex-col">

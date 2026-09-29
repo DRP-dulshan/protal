@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Copy, KeyRound, Mail, MessageCircle, UserX } from "lucide-react";
+import { Check, Copy, KeyRound, Mail, MessageCircle, Send, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
 import {
+  emailPortalInvite,
   grantPortalAccess,
   revokePortalAccess,
+  type InviteEmailState,
   type PortalAccessState,
 } from "../portal-access-actions";
 
@@ -29,6 +31,33 @@ function Submit({ hasLogin }: { hasLogin: boolean }) {
       <KeyRound className="size-4" />
       {pending ? "Creating link…" : hasLogin ? "Create a new sign-in link" : "Give portal access"}
     </Button>
+  );
+}
+
+function SendEmailButton({ sent }: { sent: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="sm" disabled={pending || sent}>
+      {sent ? <Check className="size-4" /> : <Send className="size-4" />}
+      {pending ? "Sending…" : sent ? "Email sent" : "Send email"}
+    </Button>
+  );
+}
+
+/** The branded invite, sent by the portal itself. Remounted for each new link. */
+function SendInviteEmail({ ownerId, email, link }: { ownerId: string; email: string; link: string }) {
+  const [state, action] = useActionState<InviteEmailState, FormData>(emailPortalInvite, {});
+  React.useEffect(() => {
+    if (state.error) toast.error(state.error);
+    if (state.sentTo) toast.success(`Invitation emailed to ${state.sentTo}`);
+  }, [state]);
+  return (
+    <form action={action}>
+      <input type="hidden" name="ownerId" value={ownerId} />
+      <input type="hidden" name="email" value={email} />
+      <input type="hidden" name="link" value={link} />
+      <SendEmailButton sent={Boolean(state.sentTo)} />
+    </form>
   );
 }
 
@@ -141,8 +170,11 @@ export function PortalAccess({
             </p>
             <Input readOnly value={state.link} onFocus={(e) => e.currentTarget.select()} />
             <div className="flex flex-wrap gap-2">
+              {state.canEmail && state.email && (
+                <SendInviteEmail key={state.link} ownerId={ownerId} email={state.email} link={state.link} />
+              )}
               {state.whatsappUrl && (
-                <Button asChild size="sm">
+                <Button asChild size="sm" variant={state.canEmail ? "outline" : "default"}>
                   <a href={state.whatsappUrl} target="_blank" rel="noopener noreferrer">
                     <MessageCircle className="size-4" />
                     Send on WhatsApp
@@ -152,7 +184,7 @@ export function PortalAccess({
               <Button asChild size="sm" variant="outline">
                 <a href={state.mailtoUrl}>
                   <Mail className="size-4" />
-                  Send by email
+                  {state.canEmail ? "Open in Mail" : "Send by email"}
                 </a>
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={copy}>

@@ -17,6 +17,8 @@ export interface OutboundMessage {
   to: string;
   subject?: string;
   body: string;
+  /** Email only: a formatted version of the body; body stays the plain-text part. */
+  html?: string;
   templateCode?: string;
   variables?: Record<string, string | number>;
 }
@@ -157,10 +159,12 @@ const emailDriver: MessagingDriver = {
           to: [message.to],
           subject: message.subject ?? "D|R|P Property Management",
           text: message.body,
+          ...(message.html ? { html: message.html } : {}),
         }),
       });
 
-      const payload = (await response.json()) as { id?: string; message?: string };
+      // A proxy or outage can answer with plain text rather than JSON.
+      const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
       if (!response.ok) {
         return { ok: false, provider: "resend", error: payload.message ?? `HTTP ${response.status}` };
       }

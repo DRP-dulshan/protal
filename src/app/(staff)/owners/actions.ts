@@ -275,26 +275,49 @@ export async function deleteOwner(
   const { ownerId } = parsed.data;
 
   const supabase = await createClient();
+
+  // An ownership that ended the day it began was a correction (the wrong
+  // owner picked on a unit, then changed), not history, so it does not
+  // stop the owner being deleted and goes with them.
+  const { data: ownerships, error: ownershipsError } = await supabase
+    .from("unit_ownerships")
+    .select("id, start_date, end_date")
+    .eq("owner_id", ownerId);
+  if (ownershipsError) return { error: ownershipsError.message };
+  const corrections = (ownerships ?? [])
+    .filter((o) => o.end_date !== null && o.end_date <= o.start_date)
+    .map((o) => o.id);
+
   const history = [
-    "unit_ownerships",
-    "owner_statements",
-    "management_agreements",
-    "ledger_entries",
-    "documents",
+    ["owner_statements", "statements"],
+    ["management_agreements", "management agreements"],
+    ["ledger_entries", "ledger transactions"],
+    ["documents", "documents"],
   ] as const;
   const counts = await Promise.all(
-    history.map((table) =>
+    history.map(([table]) =>
       supabase.from(table).select("id", { count: "exact", head: true }).eq("owner_id", ownerId)
     )
   );
   const failed = counts.find((c) => c.error);
   if (failed?.error) return { error: failed.error.message };
-  if (counts.some((c) => (c.count ?? 0) > 0)) {
+
+  const blocking = [
+    (ownerships ?? []).length - corrections.length > 0 ? "units (now or in the past)" : null,
+    ...history.map(([, label], i) => ((counts[i].count ?? 0) > 0 ? label : null)),
+  ].filter(Boolean);
+  if (blocking.length) {
     return {
-      error:
-        "This owner has units, statements, agreements, transactions or documents on file, " +
-        "so they cannot be deleted. Archive them instead.",
+      error: `This owner has ${blocking.join(", ")} on file, so they cannot be deleted. Archive them instead.`,
     };
+  }
+
+  if (corrections.length) {
+    const { error: cleanupError } = await supabase
+      .from("unit_ownerships")
+      .delete()
+      .in("id", corrections);
+    if (cleanupError) return { error: cleanupError.message };
   }
 
   const { data: changed, error } = await supabase

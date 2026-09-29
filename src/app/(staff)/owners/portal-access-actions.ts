@@ -6,7 +6,8 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can, isStaff } from "@/lib/auth/rbac";
 import { env } from "@/lib/env";
-import { toE164 } from "@/lib/messaging";
+import { sendMessage, toE164 } from "@/lib/messaging";
+import { buildPortalInvite } from "@/lib/notify/invite-email";
 
 export type PortalAccessState = {
   error?: string;
@@ -15,7 +16,20 @@ export type PortalAccessState = {
   email?: string;
   whatsappUrl?: string;
   mailtoUrl?: string;
+  /** The portal can send the branded email itself (Resend is set up). */
+  canEmail?: boolean;
 };
+
+const emailConfigured = () =>
+  env.messaging.emailProvider === "resend" && Boolean(env.messaging.resendApiKey);
+
+async function companyForInvite(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data } = await supabase
+    .from("company_settings")
+    .select("trade_name, legal_name, registered_address, phone, email")
+    .maybeSingle();
+  return data;
+}
 
 const grantSchema = z.object({
   ownerId: z.string().uuid(),
@@ -27,8 +41,9 @@ const grantSchema = z.object({
  * them to set their password.
  *
  * Nothing is emailed from here: Supabase's built-in mailer only delivers to the
- * project's own team, so the link is handed back for staff to send on WhatsApp
- * or email themselves - which is how the office talks to owners anyway.
+ * project's own team, so the link is handed back for staff to send on WhatsApp,
+ * from their own mail app, or (with Resend set up) as a branded email the
+ * portal sends through emailPortalInvite.
  *
  * The service key is used for one thing only, creating the auth user and its
  * link, which no user session can do. The role change and the owner link go
@@ -125,11 +140,13 @@ export async function grantPortalAccess(
     type: linkType,
   })}`;
 
-  const message =
-    `Hello ${owner.full_name}, your D|R|P owner portal is ready. ` +
-    `Open this link to set your password: ${link}\n\n` +
-    `The link works once and expires after a short time. ` +
-    `After that, sign in at ${env.ownerUrl} with ${email}.`;
+  const invite = buildPortalInvite({
+    ownerName: owner.full_name,
+    email,
+    link,
+    portalUrl: env.ownerUrl,
+    company: await companyForInvite(supabase),
+  });
 
   const phone = owner.whatsapp ?? owner.phone;
 
@@ -137,13 +154,70 @@ export async function grantPortalAccess(
   return {
     link,
     email,
+    canEmail: emailConfigured(),
     whatsappUrl: phone
-      ? `https://wa.me/${toE164(phone).replace("+", "")}?text=${encodeURIComponent(message)}`
+      ? `https://wa.me/${toE164(phone).replace("+", "")}?text=${encodeURIComponent(invite.text)}`
       : undefined,
-    mailtoUrl: `mailto:${email}?subject=${encodeURIComponent(
-      "Your D|R|P owner portal login"
-    )}&body=${encodeURIComponent(message)}`,
+    mailtoUrl: `mailto:${email}?subject=${encodeURIComponent(invite.subject)}&body=${encodeURIComponent(
+      invite.text
+    )}`,
   };
+}
+
+export type InviteEmailState = { error?: string; sentTo?: string };
+
+const inviteEmailSchema = z.object({
+  ownerId: z.string().uuid(),
+  email: z.string().trim().toLowerCase().email(),
+  link: z.string().url(),
+});
+
+/** Sends the branded portal invite from the portal's own address (Resend). */
+export async function emailPortalInvite(
+  _prev: InviteEmailState,
+  formData: FormData
+): Promise<InviteEmailState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "users.manage")) {
+    return { error: "Only a super admin can send portal invitations." };
+  }
+  if (!emailConfigured()) {
+    return { error: "Email is not set up yet (EMAIL_PROVIDER and RESEND_API_KEY)." };
+  }
+  const parsed = inviteEmailSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Create the sign-in link first." };
+  const { ownerId, email, link } = parsed.data;
+  // Only a link this portal made may go out under its name.
+  if (!link.startsWith(`${env.ownerUrl}/auth/confirm?`)) {
+    return { error: "That is not a sign-in link from this portal." };
+  }
+
+  const supabase = await createClient();
+  const { data: owner } = await supabase
+    .from("owners")
+    .select("full_name")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (!owner) return { error: "Owner not found." };
+
+  const invite = buildPortalInvite({
+    ownerName: owner.full_name,
+    email,
+    link,
+    portalUrl: env.ownerUrl,
+    company: await companyForInvite(supabase),
+  });
+  const result = await sendMessage({
+    channel: "email",
+    to: email,
+    subject: invite.subject,
+    body: invite.text,
+    html: invite.html,
+  });
+  if (!result.ok || result.skipped) {
+    return { error: `The email was not sent: ${result.error ?? "email is not set up"}` };
+  }
+  return { sentTo: email };
 }
 
 const revokeSchema = z.object({
