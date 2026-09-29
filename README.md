@@ -114,10 +114,12 @@ Dubai-specific rules the database enforces.
 
 ## Status
 
-**Phase 1 is complete end to end** — including create forms for properties,
-units, owners and tenancies, the owner portal, and minimal read-only portals for
-tenants and guests. Edit forms are the one gap: records are created in the app
-and amended in the database for now.
+**Phase 1 is complete end to end** — including create and edit forms for
+properties, units and owners, create forms for tenants and tenancies, the owner
+portal, and minimal read-only portals for tenants and guests. Properties, units
+and owners are archived rather than deleted once they have history; a record
+entered by mistake and with no history can be deleted by a super admin.
+Tenancies are created in the app and amended in the database for now.
 
 Phase 2's data model (Holiday Homes, DET permits, bookings, housekeeping,
 maintenance, communications) is fully built, constrained, RLS-protected and

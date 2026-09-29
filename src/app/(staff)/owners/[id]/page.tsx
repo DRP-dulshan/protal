@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lock } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -10,6 +10,7 @@ import {
   FieldGrid,
   Money,
   EmptyState,
+  Callout,
 } from "@/components/domain/shared";
 import {
   UnitStatusBadge,
@@ -30,6 +31,9 @@ import {
 import { formatDate, formatPeriod } from "@/lib/dates";
 import { formatPercent } from "@/lib/money";
 import { PortalAccess } from "./portal-access";
+import { Button } from "@/components/ui/button";
+import { RecordActions } from "@/components/domain/record-actions";
+import { archiveOwner, deleteOwner, restoreOwner } from "../actions";
 
 export async function generateMetadata({
   params,
@@ -136,7 +140,37 @@ export default async function OwnerDetailPage({
         ]
           .filter(Boolean)
           .join(" · ")}
+        actions={
+          can(profile.role, "owners.manage") ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/owners/${owner.id}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+              <RecordActions
+                noun="owner"
+                idName="ownerId"
+                id={owner.id}
+                isActive={owner.is_active}
+                archive={archiveOwner}
+                restore={restoreOwner}
+                remove={profile.role === "super_admin" ? deleteOwner : undefined}
+              />
+            </>
+          ) : undefined
+        }
       />
+
+      {!owner.is_active && (
+        <div className="mb-5">
+          <Callout tone="warning" title="This owner is archived">
+            They are hidden from the owners list and cannot be chosen for units. Their
+            statements and history are kept.
+          </Callout>
+        </div>
+      )}
 
       <Tabs defaultValue="profile">
         <TabsList>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileSignature, Plus, ShieldAlert } from "lucide-react";
+import { FileSignature, Pencil, Plus, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -35,6 +35,8 @@ import { DocumentList } from "@/components/domain/document-list";
 import { formatDate } from "@/lib/dates";
 import { formatPercent } from "@/lib/money";
 import { UNIT_KIND, FURNISHING, COMPLIANCE_KIND } from "@/lib/labels";
+import { RecordActions } from "@/components/domain/record-actions";
+import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
 
 export async function generateMetadata({
   params,
@@ -146,7 +148,37 @@ export default async function UnitDetailPage({
         ]
           .filter(Boolean)
           .join(" · ")}
+        actions={
+          can(profile.role, "units.manage") ? (
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/units/${unit.id}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+              <RecordActions
+                noun="unit"
+                idName="unitId"
+                id={unit.id}
+                isActive={unit.is_active}
+                archive={archiveUnit}
+                restore={restoreUnit}
+                remove={profile.role === "super_admin" ? deleteUnit : undefined}
+              />
+            </>
+          ) : undefined
+        }
       />
+
+      {!unit.is_active && (
+        <div className="mb-5">
+          <Callout tone="warning" title="This unit is archived">
+            It is hidden from lists, the dashboard and reports. Its history is kept.
+            Restore it to put it back under management.
+          </Callout>
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <UnitStatusBadge status={unit.status} />

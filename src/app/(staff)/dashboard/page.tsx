@@ -168,7 +168,7 @@ export default async function DashboardPage() {
                   {permitGaps.length > 3 && ` and ${permitGaps.length - 3} more`}.
                 </p>
                 <Button asChild size="sm" variant="outline" className="mt-3">
-                  <Link href="/units?mode=short_term">Review these units</Link>
+                  <Link href="/units?permit=missing">Review these units</Link>
                 </Button>
               </div>
             </div>
