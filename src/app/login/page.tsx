@@ -50,7 +50,7 @@ export default async function LoginPage({
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <h1 className="w-full">
-            <Logo className="rounded-xl px-10 py-8" imageClassName="w-48" priority />
+            <Logo variant="white" className="rounded-xl px-10 py-8" imageClassName="w-48" priority />
           </h1>
           <p className="mt-4 text-sm text-[var(--muted-foreground)]">
             {PORTAL_LABEL[portal]}

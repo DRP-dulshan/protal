@@ -31,7 +31,7 @@ export default function SetupPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center p-6">
       <div className="mb-6 flex items-center gap-3">
-        <Logo className="shrink-0 rounded-xl px-4 py-3" imageClassName="w-20" priority />
+        <Logo className="shrink-0" imageClassName="w-24" priority />
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Property Management setup</h1>
           <p className="text-sm text-[var(--muted-foreground)]">

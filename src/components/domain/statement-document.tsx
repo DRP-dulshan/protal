@@ -1,6 +1,7 @@
 import { formatAED, formatPercent } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import type { Tables } from "@/lib/db/database.types";
+import { Logo } from "@/components/layout/logo";
 
 type Statement = Tables<"owner_statements">;
 type Line = Tables<"owner_statement_lines">;
@@ -54,11 +55,8 @@ export function StatementDocument({
       {/* Letterhead */}
       <header className="mb-8 flex items-start justify-between gap-6 border-b-2 border-[#C6A15B] pb-5">
         <div>
-          <p className="text-2xl font-bold tracking-tight">
-            D<span className="text-[#C6A15B]">|</span>R
-            <span className="text-[#C6A15B]">|</span>P
-          </p>
-          <p className="mt-1 text-sm font-medium">
+          <Logo imageClassName="w-32" />
+          <p className="mt-3 text-sm font-medium">
             {company?.legal_name ?? "D|R|P Real Estate"}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-neutral-600">
