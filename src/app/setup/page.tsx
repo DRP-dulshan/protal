@@ -1,5 +1,6 @@
-import { CheckCircle2, Circle, Building2 } from "lucide-react";
+import { CheckCircle2, Circle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Logo } from "@/components/layout/logo";
 import { env, isConfigured } from "@/lib/env";
 
 export const metadata = { title: "Setup" };
@@ -30,14 +31,9 @@ export default function SetupPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center p-6">
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-xl bg-[var(--primary)]">
-          <Building2 className="size-5 text-[var(--primary-foreground)]" />
-        </div>
+        <Logo className="shrink-0 rounded-xl px-4 py-3" imageClassName="w-20" priority />
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            D<span className="text-[var(--brand)]">|</span>R
-            <span className="text-[var(--brand)]">|</span>P Property Management
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight">Property Management setup</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
             {isConfigured ? "Configuration detected" : "Configuration required"}
           </p>

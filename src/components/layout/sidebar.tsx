@@ -7,6 +7,7 @@ import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { can, ROLE_LABELS, type Role } from "@/lib/auth/rbac";
+import { Logo } from "./logo";
 import type { NavSection } from "./nav";
 
 function Icon({ name, className }: { name: string; className?: string }) {
@@ -45,19 +46,8 @@ export function Sidebar({
 
   const nav = (
     <nav className="flex h-full flex-col">
-      <div className="flex items-center gap-2.5 px-4 py-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]">
-          <Icons.Building2 className="size-4.5 text-[var(--primary-foreground)]" />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">
-            D<span className="text-[var(--brand)]">|</span>R
-            <span className="text-[var(--brand)]">|</span>P
-          </p>
-          <p className="truncate text-[11px] text-[var(--muted-foreground)]">
-            Property Management
-          </p>
-        </div>
+      <div className="p-3">
+        <Logo className="rounded-lg px-6 py-5" imageClassName="w-36" priority />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
@@ -127,10 +117,7 @@ export function Sidebar({
         >
           <Icons.Menu className="size-5" />
         </Button>
-        <span className="text-sm font-semibold">
-          D<span className="text-[var(--brand)]">|</span>R
-          <span className="text-[var(--brand)]">|</span>P
-        </span>
+        <Logo className="rounded-md px-2.5 py-1.5" imageClassName="w-16" />
       </div>
 
       {open && (

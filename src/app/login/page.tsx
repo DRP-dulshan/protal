@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Logo } from "@/components/layout/logo";
 import { isConfigured } from "@/lib/env";
 import { getProfile } from "@/lib/auth/session";
 import { PORTAL_LABEL, portalHome, roleAllowedOnPortal } from "@/lib/portal";
@@ -49,14 +49,10 @@ export default async function LoginPage({
     <main className="flex min-h-dvh items-center justify-center bg-[var(--muted)] p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-[var(--primary)]">
-            <Building2 className="size-6 text-[var(--primary-foreground)]" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            D<span className="text-[var(--brand)]">|</span>R
-            <span className="text-[var(--brand)]">|</span>P
+          <h1 className="w-full">
+            <Logo className="rounded-xl px-10 py-8" imageClassName="w-48" priority />
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
             {PORTAL_LABEL[portal]}
           </p>
         </div>

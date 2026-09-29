@@ -62,6 +62,9 @@
   --muted: oklch(0.965 0.004 255);
   --muted-foreground: oklch(0.53 0.02 260);
 
+  /* Behind the white logo artwork. Not redefined in .dark: stays navy. */
+  --logo-surface: oklch(0.24 0.035 265);
+
   /* Gold #C6A15B */
   --brand: oklch(0.72 0.09 82);
   --brand-foreground: oklch(0.21 0.03 265);
