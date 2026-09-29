@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { isConfigured } from "@/lib/env";
 import { getProfile } from "@/lib/auth/session";
-import { homePathForRole } from "@/lib/auth/rbac";
+import { PORTAL_LABEL, portalHome, roleAllowedOnPortal } from "@/lib/portal";
+import { currentPortal, WRONG_PORTAL_PATH } from "@/lib/portal-server";
 import { signIn } from "./actions";
 
 export const metadata = { title: "Sign in" };
@@ -17,6 +18,10 @@ const ERRORS: Record<string, string> = {
   account_disabled:
     "This account has been deactivated. Contact your administrator.",
   missing: "Enter both your email address and password.",
+  wrong_portal:
+    "This account cannot sign in here. Owners use the owner portal; " +
+    "D|R|P staff use the admin portal.",
+  no_access: "This account does not have portal access. Contact your property manager.",
   unavailable:
     "The service is temporarily unavailable, so we could not check your sign-in. " +
     "Your details are fine - please try again shortly.",
@@ -28,11 +33,15 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const params = await searchParams;
+  const portal = await currentPortal();
+  if (!portal) notFound();
 
-  if (!isConfigured) redirect("/setup");
+  if (!isConfigured && portal === "admin") redirect("/setup");
 
   const profile = await getProfile();
-  if (profile) redirect(homePathForRole(profile.role));
+  if (profile) {
+    redirect(roleAllowedOnPortal(profile.role, portal) ? portalHome(portal) : WRONG_PORTAL_PATH);
+  }
 
   const error = params.error ? (ERRORS[params.error] ?? ERRORS.invalid) : null;
 
@@ -48,7 +57,7 @@ export default async function LoginPage({
             <span className="text-[var(--brand)]">|</span>P
           </h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Property Management System
+            {PORTAL_LABEL[portal]}
           </p>
         </div>
 
@@ -97,11 +106,13 @@ export default async function LoginPage({
         </Card>
 
         <p className="mt-4 text-center text-xs text-[var(--muted-foreground)]">
-          Owners and tenants: use the credentials issued by your property
-          manager.{" "}
-          <Link href="/setup" className="underline underline-offset-2">
-            Setup guide
-          </Link>
+          {portal === "owner" ? (
+            "New here? Use the invitation email from D|R|P to set your password."
+          ) : (
+            <Link href="/setup" className="underline underline-offset-2">
+              Setup guide
+            </Link>
+          )}
         </p>
       </div>
     </main>

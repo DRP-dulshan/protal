@@ -1,33 +1,24 @@
-import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
-import { OWNER_NAV, TENANT_NAV, GUEST_NAV } from "@/components/layout/nav";
-import { requireProfile } from "@/lib/auth/session";
-import { homePathForRole, isStaff } from "@/lib/auth/rbac";
+import { OWNER_NAV } from "@/components/layout/nav";
+import { requirePortalProfile } from "@/lib/auth/session";
 import { signOut } from "@/app/login/actions";
 
 /**
- * Portal shell for owners, tenants and guests. Staff are redirected to the
- * back office so nobody works out of the wrong surface by accident.
+ * Owner portal shell, served on the owner host only. Staff sessions never
+ * reach it: staff cannot sign in on this host, and any other session found
+ * here is signed out. The tenant and guest portals are disabled.
  */
 export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await requireProfile();
-  if (isStaff(profile.role)) redirect(homePathForRole(profile.role));
-
-  const sections =
-    profile.role === "owner"
-      ? OWNER_NAV
-      : profile.role === "guest"
-        ? GUEST_NAV
-        : TENANT_NAV;
+  const profile = await requirePortalProfile("owner");
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
       <Sidebar
-        sections={sections}
+        sections={OWNER_NAV}
         role={profile.role}
         userName={profile.full_name || profile.email || "User"}
         signOutAction={signOut}

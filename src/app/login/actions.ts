@@ -3,13 +3,17 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { homePathForRole, type Role } from "@/lib/auth/rbac";
+import { roleAllowedOnPortal, safeNextPath } from "@/lib/portal";
+import { currentPortal } from "@/lib/portal-server";
+import type { Role } from "@/lib/auth/rbac";
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "");
 
+  const portal = await currentPortal();
+  if (!portal) redirect("/login?error=invalid");
   if (!email || !password) redirect("/login?error=missing");
 
   const supabase = await createClient();
@@ -42,6 +46,14 @@ export async function signIn(formData: FormData) {
     redirect("/login?error=account_disabled");
   }
 
+  // Owners may only sign in on the owner host and staff only on the admin
+  // host. The session is discarded immediately so no cookie for the wrong
+  // portal survives the attempt.
+  if (!roleAllowedOnPortal(profile?.role as Role | undefined, portal)) {
+    await supabase.auth.signOut();
+    redirect("/login?error=wrong_portal");
+  }
+
   // Record the sign-in; a failure here must not block the user getting in.
   await supabase
     .from("profiles")
@@ -49,7 +61,7 @@ export async function signIn(formData: FormData) {
     .eq("id", data.user.id);
 
   revalidatePath("/", "layout");
-  redirect(next && next.startsWith("/") ? next : homePathForRole(profile?.role as Role));
+  redirect(safeNextPath(portal, next));
 }
 
 export async function signOut() {

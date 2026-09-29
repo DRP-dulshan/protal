@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
+  // Local development runs on admin.localhost:3000 and owner.localhost:3000.
+  // Without this, `next dev` refuses dev-only resources (HMR, overlays) to
+  // any origin other than plain localhost.
+  allowedDevOrigins: ["admin.localhost", "owner.localhost", "*.localhost"],
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },

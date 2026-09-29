@@ -29,6 +29,14 @@ export const env = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "D|R|P Property Management",
 
+  // Canonical origins of the two portals. Used wherever the app has to build
+  // an absolute link: invite emails, password resets, the iCal export URL.
+  adminUrl: optional("ADMIN_URL") ?? "http://admin.localhost:3000",
+  ownerUrl: optional("OWNER_URL") ?? "http://owner.localhost:3000",
+  // Portal served on a host with no admin./owner. prefix (preview deployments,
+  // bare localhost). Unset in production so unknown hosts serve nothing.
+  portalFallback: optional("PORTAL_FALLBACK"),
+
   storage: {
     driver: (optional("STORAGE_DRIVER") ?? "supabase") as "supabase" | "s3",
     documentsBucket: optional("STORAGE_BUCKET_DOCUMENTS") ?? "documents",

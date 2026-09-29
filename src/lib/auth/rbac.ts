@@ -179,6 +179,6 @@ export function homePathForRole(role: Role | null | undefined): string {
   if (!role) return "/login";
   if (isStaff(role)) return "/dashboard";
   if (role === "owner") return "/portal/owner";
-  if (role === "tenant") return "/portal/tenant";
-  return "/portal/guest";
+  // Tenant and guest portals are disabled; those accounts cannot sign in.
+  return "/auth/signout?reason=no_access";
 }

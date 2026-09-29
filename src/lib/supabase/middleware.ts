@@ -75,6 +75,11 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/setup") ||
     // Scheduled jobs carry no session; they authenticate with CRON_SECRET.
     path.startsWith("/api/keep-alive") ||
+    path.startsWith("/api/cron/") ||
+    // The website's booking API and the iCal export are unauthenticated by
+    // design; they enforce their own checks (CORS, rate limits, secret token).
+    path.startsWith("/api/public/") ||
+    path.startsWith("/api/ical/") ||
     path === "/";
 
   const exp = accessTokenExpiry(request);

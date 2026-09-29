@@ -1,12 +1,16 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { isConfigured } from "@/lib/env";
 import { getProfile } from "@/lib/auth/session";
-import { homePathForRole } from "@/lib/auth/rbac";
+import { portalHome, roleAllowedOnPortal } from "@/lib/portal";
+import { currentPortal, WRONG_PORTAL_PATH } from "@/lib/portal-server";
 
-/** Front door: send each role to the surface it actually works in. */
+/** Front door: each host sends its own users to its own landing page. */
 export default async function Home() {
-  if (!isConfigured) redirect("/setup");
+  const portal = await currentPortal();
+  if (!portal) notFound();
+  if (!isConfigured) redirect(portal === "admin" ? "/setup" : "/login");
 
   const profile = await getProfile();
-  redirect(profile ? homePathForRole(profile.role) : "/login");
+  if (!profile) redirect("/login");
+  redirect(roleAllowedOnPortal(profile.role, portal) ? portalHome(portal) : WRONG_PORTAL_PATH);
 }

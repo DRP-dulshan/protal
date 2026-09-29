@@ -1,21 +1,18 @@
-import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { STAFF_NAV } from "@/components/layout/nav";
-import { requireProfile } from "@/lib/auth/session";
-import { isStaff, homePathForRole } from "@/lib/auth/rbac";
+import { requirePortalProfile } from "@/lib/auth/session";
 import { signOut } from "@/app/login/actions";
 
 /**
- * Back-office shell. Portal users who land here are bounced to their own
- * surface rather than shown an empty admin screen.
+ * Back-office shell, served on the admin host only. A non-staff session that
+ * somehow reaches it is signed out rather than shown an empty admin screen.
  */
 export default async function StaffLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await requireProfile();
-  if (!isStaff(profile.role)) redirect(homePathForRole(profile.role));
+  const profile = await requirePortalProfile("admin");
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">

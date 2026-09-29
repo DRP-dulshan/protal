@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isConfigured } from "@/lib/env";
 import type { Tables } from "@/lib/db/database.types";
 import { can, homePathForRole, type Capability, type Role } from "./rbac";
+import { roleAllowedOnPortal, type Portal } from "@/lib/portal";
+import { currentPortal, WRONG_PORTAL_PATH } from "@/lib/portal-server";
 
 export type Profile = Tables<"profiles">;
 
@@ -72,6 +74,20 @@ export async function requireProfile(): Promise<Profile> {
   const profile = await getProfile();
   if (!profile) redirect("/login");
   if (!profile.is_active) redirect("/login?error=account_disabled");
+  return profile;
+}
+
+/**
+ * The profile of a user who belongs on this portal. A session that exists but
+ * is on the wrong host - an owner on admin., a staff login on owner. - is
+ * signed out rather than shown anything, and so is a request that reached a
+ * portal layout on a host that is not that portal.
+ */
+export async function requirePortalProfile(portal: Portal): Promise<Profile> {
+  const profile = await requireProfile();
+  if ((await currentPortal()) !== portal || !roleAllowedOnPortal(profile.role, portal)) {
+    redirect(WRONG_PORTAL_PATH);
+  }
   return profile;
 }
 
