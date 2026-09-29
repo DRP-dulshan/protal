@@ -200,7 +200,7 @@ async function syncSingleOwnership(
 ): Promise<string | null> {
   const { data: active, error } = await supabase
     .from("unit_ownerships")
-    .select("id, owner_id, ownership_pct")
+    .select("id, owner_id, ownership_pct, start_date")
     .eq("unit_id", unitId)
     .is("end_date", null);
   if (error) return error.message;
@@ -219,10 +219,12 @@ async function syncSingleOwnership(
   }
 
   if (current) {
-    const { error: e } = await supabase
-      .from("unit_ownerships")
-      .update({ end_date: today })
-      .eq("id", current.id);
+    // Changing the owner the same day it was set corrects a mistake: the
+    // wrong owner never owned the unit, so no history is kept for them.
+    const { error: e } =
+      current.start_date >= today
+        ? await supabase.from("unit_ownerships").delete().eq("id", current.id)
+        : await supabase.from("unit_ownerships").update({ end_date: today }).eq("id", current.id);
     if (e) return e.message;
   }
 
