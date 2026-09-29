@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { formatDate, formatPeriod } from "@/lib/dates";
 import { formatPercent } from "@/lib/money";
+import { PortalAccess } from "./portal-access";
 
 export async function generateMetadata({
   params,
@@ -64,45 +65,60 @@ export default async function OwnerDetailPage({
 
   const showBank = can(profile.role, "owners.bank_details");
 
-  const [unitsResult, statementsResult, documentsResult, bankResult, agreementsResult] =
-    await Promise.all([
-      supabase
-        .from("unit_ownerships")
-        .select(
-          "ownership_pct, is_primary_contact, units(id, unit_number, status, target_annual_rent_aed, properties(name))"
-        )
-        .eq("owner_id", id)
-        .is("end_date", null),
-      supabase
-        .from("owner_statements")
-        .select("*")
-        .eq("owner_id", id)
-        .order("period_start", { ascending: false })
-        .limit(12),
-      supabase
-        .from("documents")
-        .select("*")
-        .eq("owner_id", id)
-        .order("created_at", { ascending: false }),
-      showBank
-        ? supabase
-            .from("owner_bank_accounts")
-            .select("*")
-            .eq("owner_id", id)
-            .eq("is_active", true)
-        : Promise.resolve({ data: [], error: null }),
-      supabase
-        .from("management_agreements")
-        .select("*, units(unit_number, properties(name))")
-        .eq("owner_id", id)
-        .eq("is_active", true),
-    ]);
+  const [
+    unitsResult,
+    statementsResult,
+    documentsResult,
+    bankResult,
+    agreementsResult,
+    loginsResult,
+  ] = await Promise.all([
+    supabase
+      .from("unit_ownerships")
+      .select(
+        "ownership_pct, is_primary_contact, units(id, unit_number, status, target_annual_rent_aed, properties(name))"
+      )
+      .eq("owner_id", id)
+      .is("end_date", null),
+    supabase
+      .from("owner_statements")
+      .select("*")
+      .eq("owner_id", id)
+      .order("period_start", { ascending: false })
+      .limit(12),
+    supabase
+      .from("documents")
+      .select("*")
+      .eq("owner_id", id)
+      .order("created_at", { ascending: false }),
+    showBank
+      ? supabase
+          .from("owner_bank_accounts")
+          .select("*")
+          .eq("owner_id", id)
+          .eq("is_active", true)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("management_agreements")
+      .select("*, units(unit_number, properties(name))")
+      .eq("owner_id", id)
+      .eq("is_active", true),
+    supabase
+      .from("owner_users")
+      .select("profile_id, profiles(email, last_login_at)")
+      .eq("owner_id", id),
+  ]);
 
   const ownedUnits = unitsResult.data ?? [];
   const statements = statementsResult.data ?? [];
   const documents = documentsResult.data ?? [];
   const bankAccounts = bankResult.data ?? [];
   const agreements = agreementsResult.data ?? [];
+  const logins = (loginsResult.data ?? []).map((row) => ({
+    profileId: row.profile_id,
+    email: row.profiles?.email ?? null,
+    lastLoginAt: row.profiles?.last_login_at ?? null,
+  }));
 
   const ytdPayout = statements
     .filter((s) => new Date(s.period_start).getFullYear() === new Date().getFullYear())
@@ -152,6 +168,13 @@ export default async function OwnerDetailPage({
                 </FieldGrid>
               </CardContent>
             </Card>
+
+            <PortalAccess
+              ownerId={owner.id}
+              defaultEmail={owner.email}
+              logins={logins}
+              canManage={can(profile.role, "users.manage")}
+            />
 
             <Card>
               <CardHeader className="pb-3">

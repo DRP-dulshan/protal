@@ -36,7 +36,10 @@ export async function createClient() {
  * Only ever use this for background work that acts on behalf of the system
  * itself - compliance alert sweeps, scheduled statement runs, webhook intake.
  * Never use it to serve a user request: that would silently discard every
- * access rule in 0010_rls.sql.
+ * access rule in 0010_rls.sql. The one exception is creating an owner's login
+ * (owners/portal-access-actions.ts), which only the Auth admin API can do; it
+ * touches auth only, and everything it writes to tables goes through the
+ * caller's own session.
  */
 export function createAdminClient() {
   if (!env.supabaseServiceRoleKey) {

@@ -22,6 +22,8 @@ const ERRORS: Record<string, string> = {
     "This account cannot sign in here. Owners use the owner portal; " +
     "D|R|P staff use the admin portal.",
   no_access: "This account does not have portal access. Contact your property manager.",
+  link_invalid:
+    "That link has expired or has already been used. Ask D|R|P to send you a new one.",
   unavailable:
     "The service is temporarily unavailable, so we could not check your sign-in. " +
     "Your details are fine - please try again shortly.",
@@ -103,7 +105,7 @@ export default async function LoginPage({
 
         <p className="mt-4 text-center text-xs text-[var(--muted-foreground)]">
           {portal === "owner" ? (
-            "New here? Use the invitation email from D|R|P to set your password."
+            "New here, or forgot your password? Ask D|R|P for a sign-in link."
           ) : (
             <Link href="/setup" className="underline underline-offset-2">
               Setup guide
