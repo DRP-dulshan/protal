@@ -4,7 +4,7 @@
   "private": true,
   "description": "D|R|P Property Management System - Dubai",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
