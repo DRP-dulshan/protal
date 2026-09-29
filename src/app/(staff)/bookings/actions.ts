@@ -8,6 +8,7 @@ import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { dubaiToday, nightsBetween } from "@/lib/calendar";
 import { flushEmailsSoon } from "@/lib/notify/flush";
+import { earningsToBookingAmounts, parseAirbnbEarnings } from "@/lib/airbnb/earnings-csv";
 
 export type ActionState = { error?: string; success?: string };
 
@@ -483,4 +484,91 @@ export async function updateBookingPrice(
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingId}`);
   return { success: "Price saved." };
+}
+
+export type ImportState = ActionState & {
+  updated?: number;
+  notFound?: string[];
+  otherCurrency?: string[];
+  skipped?: Record<string, number>;
+};
+
+/**
+ * Airbnb's earnings export -> booking prices, matched on the confirmation
+ * code the calendar sync stores in external_booking_id. Re-importing the same
+ * file sets the same values again, so it is safe to repeat.
+ */
+export async function importAirbnbEarnings(
+  _prev: ImportState,
+  formData: FormData
+): Promise<ImportState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) {
+    return { error: "You do not have permission to import earnings." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file first." };
+  if (file.size > 5_000_000) return { error: "That file is too large for an earnings export." };
+
+  const { reservations, skipped, errors } = parseAirbnbEarnings(await file.text());
+  if (errors.length) return { error: errors[0] };
+  if (reservations.length === 0) {
+    return { error: "No reservations found in this file.", skipped };
+  }
+
+  const supabase = await createClient();
+  const { data: bookings, error } = await supabase
+    .from("bookings")
+    .select("id, external_booking_id, check_in, check_out, guest_id")
+    .eq("channel", "airbnb")
+    .in("external_booking_id", reservations.map((r) => r.code));
+  if (error) return { error: error.message };
+
+  const byCode = new Map((bookings ?? []).map((b) => [b.external_booking_id!.toUpperCase(), b]));
+  const notFound: string[] = [];
+  const otherCurrency: string[] = [];
+  let updated = 0;
+
+  for (const r of reservations) {
+    const booking = byCode.get(r.code);
+    if (!booking) {
+      notFound.push(r.code);
+      continue;
+    }
+    // Amounts are kept in AED; a payout in another currency needs a rate.
+    if (r.currency && r.currency !== "AED") {
+      otherCurrency.push(`${r.code} (${r.currency})`);
+      continue;
+    }
+
+    let guestId = booking.guest_id;
+    if (!guestId && r.guest) {
+      const { data: guest } = await supabase
+        .from("guests")
+        .insert({ full_name: r.guest })
+        .select("id")
+        .single();
+      guestId = guest?.id ?? null;
+    }
+
+    const { data: changed } = await supabase
+      .from("bookings")
+      .update({
+        guest_id: guestId,
+        ...earningsToBookingAmounts(r, nightsBetween(booking.check_in, booking.check_out)),
+      })
+      .eq("id", booking.id)
+      .select("id");
+    if (changed?.length) updated++;
+  }
+
+  revalidatePath("/bookings");
+  return {
+    success: `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
+    updated,
+    notFound,
+    otherCurrency,
+    skipped,
+  };
 }

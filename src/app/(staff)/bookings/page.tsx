@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BedDouble, CalendarDays, LogIn, LogOut, Plus, Search } from "lucide-react";
+import { BedDouble, CalendarDays, LogIn, LogOut, Plus, Search, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -127,6 +127,14 @@ export default async function BookingsPage({
           <>
             <ExportButton rows={exportRows} filename="drp-bookings" />
             {canManage && (
+              <Button asChild variant="outline">
+                <Link href="/bookings/import">
+                  <Upload className="size-4" />
+                  Import Airbnb earnings
+                </Link>
+              </Button>
+            )}
+            {canManage && (
               <Button asChild>
                 <Link href="/bookings/new">
                   <Plus className="size-4" />
@@ -150,11 +158,19 @@ export default async function BookingsPage({
             tone="warning"
             title={`${unpriced} ${unpriced === 1 ? "stay has" : "stays have"} no price yet`}
           >
-            Airbnb stays arrive from the calendar with dates only. Open one and use Enter
-            price to record what Airbnb pays out.{" "}
+            Airbnb stays arrive from the calendar with dates only.{" "}
             <Link href="/bookings?view=needs_price" className="underline underline-offset-2">
               See them
             </Link>
+            {canManage && (
+              <>
+                {" "}or{" "}
+                <Link href="/bookings/import" className="underline underline-offset-2">
+                  import Airbnb&apos;s earnings CSV
+                </Link>{" "}
+                to price them all at once
+              </>
+            )}
             .
           </Callout>
         </div>
