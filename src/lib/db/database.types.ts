@@ -82,6 +82,7 @@ export type Database = {
           note: string | null;
           created_by: string | null;
           created_at: string;
+          ical_uid: string | null;
         };
         Insert: {
           id?: string;
@@ -94,6 +95,7 @@ export type Database = {
           note?: string | null;
           created_by?: string | null;
           created_at?: string;
+          ical_uid?: string | null;
         };
         Update: {
           id?: string;
@@ -106,6 +108,7 @@ export type Database = {
           note?: string | null;
           created_by?: string | null;
           created_at?: string;
+          ical_uid?: string | null;
         };
         Relationships: [
           {
@@ -246,6 +249,9 @@ export type Database = {
           created_at: string;
           updated_at: string;
           guest_count_known: boolean;
+          ical_uid: string | null;
+          imported_without_permit: boolean;
+          last_seen_in_feed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -283,6 +289,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           guest_count_known?: boolean;
+          ical_uid?: string | null;
+          imported_without_permit?: boolean;
+          last_seen_in_feed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -320,6 +329,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           guest_count_known?: boolean;
+          ical_uid?: string | null;
+          imported_without_permit?: boolean;
+          last_seen_in_feed_at?: string | null;
         };
         Relationships: [
           {
@@ -3959,6 +3971,12 @@ export type Database = {
           notes: string | null;
           created_at: string;
           updated_at: string;
+          airbnb_ical_url: string | null;
+          ical_export_token: string;
+          ical_last_synced_at: string | null;
+          ical_last_status: string | null;
+          ical_last_error: string | null;
+          ical_last_event_count: number | null;
         };
         Insert: {
           id?: string;
@@ -3993,6 +4011,12 @@ export type Database = {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          airbnb_ical_url?: string | null;
+          ical_export_token?: string;
+          ical_last_synced_at?: string | null;
+          ical_last_status?: string | null;
+          ical_last_error?: string | null;
+          ical_last_event_count?: number | null;
         };
         Update: {
           id?: string;
@@ -4027,6 +4051,12 @@ export type Database = {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          airbnb_ical_url?: string | null;
+          ical_export_token?: string;
+          ical_last_synced_at?: string | null;
+          ical_last_status?: string | null;
+          ical_last_error?: string | null;
+          ical_last_event_count?: number | null;
         };
         Relationships: [
           {
@@ -4511,6 +4541,10 @@ export type Database = {
       };
     };
     Functions: {
+      apply_airbnb_ical: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       current_profile: {
         Args: Record<string, unknown>;
         Returns: unknown;
@@ -4520,6 +4554,10 @@ export type Database = {
         Returns: unknown;
       };
       generate_owner_statement: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      ical_export_events: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };

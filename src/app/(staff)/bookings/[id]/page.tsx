@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { Callout, Field, FieldGrid, Money, PageHeader } from "@/components/domain/shared";
+import { Badge } from "@/components/ui/badge";
 import { BookingStatusBadge, ChannelBadge } from "@/components/domain/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
@@ -31,7 +32,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   if (!b) notFound();
 
   const unitLabel = `${b.units?.properties?.name ?? ""} · ${b.units?.unit_number ?? ""}`;
-  const guestCount = [
+  // Airbnb's calendar feed carries no guest count; imports store a placeholder.
+  const guestCount = !b.guest_count_known ? "Not provided by Airbnb's calendar" : [
     `${b.adults} adult${b.adults === 1 ? "" : "s"}`,
     b.children ? `${b.children} child${b.children === 1 ? "" : "ren"}` : null,
     b.infants ? `${b.infants} infant${b.infants === 1 ? "" : "s"}` : null,
@@ -55,7 +57,18 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       <div className="mb-5 flex flex-wrap gap-2">
         <BookingStatusBadge status={b.status} />
         <ChannelBadge channel={b.channel} />
+        {b.ical_uid && <Badge variant="muted">Synced from Airbnb calendar</Badge>}
       </div>
+
+      {b.imported_without_permit && b.status !== "cancelled" && (
+        <div className="mb-5">
+          <Callout tone="danger" title="Imported without a valid DET permit">
+            This Airbnb reservation was recorded so its nights stay blocked, but the unit
+            had no valid DET permit for the check-in date. Add or renew the permit before
+            the guest arrives.
+          </Callout>
+        </div>
+      )}
 
       {b.status === "cancelled" && (
         <div className="mb-5">

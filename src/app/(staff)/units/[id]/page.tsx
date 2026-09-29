@@ -40,6 +40,8 @@ import { RecordActions } from "@/components/domain/record-actions";
 import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
 import { PermitDialog } from "./permit-dialog";
 import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
+import { ChannelSync } from "./channel-sync";
+import { env } from "@/lib/env";
 import { BookingCalendar } from "@/components/domain/booking-calendar";
 import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
 
@@ -93,6 +95,7 @@ export default async function UnitDetailPage({
     agreementResult,
     staysResult,
     blocksResult,
+    flaggedResult,
   ] = await Promise.all([
     requireCapability("units.view"),
     supabase
@@ -147,6 +150,14 @@ export default async function UnitDetailPage({
       .neq("reason", "booking")
       .gt("end_date", dubaiToday() < gridStart ? dubaiToday() : gridStart)
       .order("start_date"),
+    // Upcoming Airbnb stays imported while the unit had no DET permit.
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("unit_id", id)
+      .eq("imported_without_permit", true)
+      .in("status", ["confirmed", "checked_in"])
+      .gt("check_out", dubaiToday()),
   ]);
 
   if (!unit) notFound();
@@ -168,7 +179,8 @@ export default async function UnitDetailPage({
   }));
   const holds = blocksResult.data ?? [];
   const today = dubaiToday();
-  const upcomingHolds = holds.filter((h) => h.end_date > today);
+  // Airbnb's own "not available" periods are managed by the sync, not by hand.
+  const upcomingHolds = holds.filter((h) => h.end_date > today && h.reason !== "channel_sync");
 
   const activeLease = leases.find(
     (l) => l.status === "active" || l.status === "expiring"
@@ -177,6 +189,13 @@ export default async function UnitDetailPage({
   const isShortTerm =
     unit.operating_mode === "short_term" || unit.operating_mode === "both";
   const hasValidPermit = overview?.has_valid_permit ?? false;
+  const lastSynced = unit.ical_last_synced_at
+    ? new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Dubai",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(unit.ical_last_synced_at))
+    : null;
 
   return (
     <>
@@ -469,6 +488,17 @@ export default async function UnitDetailPage({
         {isShortTerm && (
           <>
           <TabsContent value="calendar">
+            <ChannelSync
+              unitId={unit.id}
+              airbnbUrl={unit.airbnb_ical_url}
+              exportUrl={`${env.adminUrl}/api/ical/${unit.ical_export_token}.ics`}
+              lastSynced={lastSynced}
+              status={unit.ical_last_status}
+              error={unit.ical_last_error}
+              eventCount={unit.ical_last_event_count}
+              flaggedCount={hasValidPermit ? 0 : (flaggedResult.count ?? 0)}
+              canManage={can(profile.role, "bookings.manage")}
+            />
             <Card className="mb-5">
               <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-base">Availability</CardTitle>

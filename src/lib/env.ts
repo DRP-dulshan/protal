@@ -40,6 +40,10 @@ export const env = {
     optional("PORTAL_FALLBACK") ??
     (process.env.NODE_ENV === "development" ? "admin" : undefined),
 
+  // Shared secret for the scheduled endpoints (/api/cron/*). The scheduler
+  // (Supabase pg_cron) sends it as "Authorization: Bearer <secret>".
+  cronSecret: optional("CRON_SECRET"),
+
   storage: {
     driver: (optional("STORAGE_DRIVER") ?? "supabase") as "supabase" | "s3",
     documentsBucket: optional("STORAGE_BUCKET_DOCUMENTS") ?? "documents",
