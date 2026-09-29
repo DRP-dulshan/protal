@@ -1,0 +1,88 @@
+/**
+ * Date arithmetic for the booking calendars.
+ *
+ * Everything works on ISO `YYYY-MM-DD` strings and UTC midnights, so a server
+ * in UTC and a browser in Dubai agree on which day a stay starts. Stays are
+ * half-open, exactly like the database's exclusion constraint: a stay from the
+ * 10th to the 15th occupies the nights of the 10th-14th, and the 15th is free
+ * for the next guest to check in.
+ */
+
+const DAY_MS = 86_400_000;
+const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000; // UTC+4, no daylight saving
+
+export const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+const utc = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+export function addDays(iso: string, days: number): string {
+  return isoDate(new Date(utc(iso).getTime() + days * DAY_MS));
+}
+
+/** Nights between two dates (check-out minus check-in). */
+export function nightsBetween(checkIn: string, checkOut: string): number {
+  return Math.round((utc(checkOut).getTime() - utc(checkIn).getTime()) / DAY_MS);
+}
+
+/** Today's date in Dubai, whatever the server's own timezone. */
+export function dubaiToday(now = new Date()): string {
+  return isoDate(new Date(now.getTime() + DUBAI_OFFSET_MS));
+}
+
+/** `YYYY-MM` from a query parameter, falling back to the current Dubai month. */
+export function parseMonth(value: string | null | undefined, now = new Date()): string {
+  if (value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+    const year = Number(value.slice(0, 4));
+    if (year >= 2000 && year <= 2100) return value;
+  }
+  return dubaiToday(now).slice(0, 7);
+}
+
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return isoDate(d).slice(0, 7);
+}
+
+/** First and last day of a `YYYY-MM` month. */
+export function monthRange(month: string): { start: string; end: string } {
+  const start = `${month}-01`;
+  const end = addDays(`${shiftMonth(month, 1)}-01`, -1);
+  return { start, end };
+}
+
+/**
+ * The weeks shown for a month, Monday first, padded with the neighbouring
+ * months' days so every row has seven cells.
+ */
+export function monthGrid(month: string): string[][] {
+  const { start, end } = monthRange(month);
+  const weekday = (utc(start).getUTCDay() + 6) % 7; // Monday = 0
+  let cursor = addDays(start, -weekday);
+  const weeks: string[][] = [];
+  while (cursor <= end || weeks.length === 0) {
+    const week: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(cursor);
+      cursor = addDays(cursor, 1);
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+/** Does a half-open [start, end) range cover the night of `day`? */
+export function coversNight(day: string, start: string, end: string): boolean {
+  return start <= day && day < end;
+}
+
+/** Do two half-open date ranges overlap? */
+export function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/** Nights of a stay that fall inside [from, to] inclusive. */
+export function nightsWithin(checkIn: string, checkOut: string, from: string, to: string): number {
+  const start = checkIn > from ? checkIn : from;
+  const endExclusive = checkOut < addDays(to, 1) ? checkOut : addDays(to, 1);
+  return Math.max(0, nightsBetween(start, endExclusive));
+}

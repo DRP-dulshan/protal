@@ -118,6 +118,21 @@ export function BookingStatusBadge({ status }: { status: Enums<"booking_status">
   return <Badge variant={bookingStatus[status]}>{L.BOOKING_STATUS[status]}</Badge>;
 }
 
+/** Where a booking came from. Airbnb and direct get their calendar colours. */
+export function ChannelBadge({ channel }: { channel: Enums<"sales_channel"> }) {
+  const tone =
+    channel === "airbnb"
+      ? "border-transparent bg-rose-500/12 text-rose-700 dark:text-rose-300"
+      : channel === "direct"
+        ? undefined
+        : "border-transparent bg-sky-500/12 text-sky-700 dark:text-sky-300";
+  return (
+    <Badge variant={channel === "direct" ? "brand" : "default"} className={tone}>
+      {L.SALES_CHANNEL[channel]}
+    </Badge>
+  );
+}
+
 const maintenanceStatus: Record<Enums<"maintenance_status">, Variant> = {
   submitted: "warning",
   acknowledged: "warning",

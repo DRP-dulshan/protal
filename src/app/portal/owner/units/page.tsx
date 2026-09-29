@@ -1,12 +1,9 @@
-import { Building2 } from "lucide-react";
+import Link from "next/link";
+import { Building2, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
-import { PageHeader, EmptyState, Money, Field, FieldGrid } from "@/components/domain/shared";
-import {
-  UnitStatusBadge,
-  OperatingModeBadge,
-  EjariBadge,
-} from "@/components/domain/status-badge";
+import { PageHeader, EmptyState, Field, FieldGrid } from "@/components/domain/shared";
+import { UnitStatusBadge, OperatingModeBadge } from "@/components/domain/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
 import { UNIT_KIND } from "@/lib/labels";
@@ -18,7 +15,7 @@ export default async function OwnerUnitsPage() {
   const supabase = await createClient();
 
   const { data } = await supabase
-    .from("v_units_overview")
+    .from("owner_units_view")
     .select("*")
     .eq("is_active", true)
     .order("property_name");
@@ -29,7 +26,7 @@ export default async function OwnerUnitsPage() {
     <>
       <PageHeader
         title="My properties"
-        description="Every unit D|R|P manages on your behalf."
+        description="Every unit D|R|P manages on your behalf. Open one to see its booking calendar."
       />
 
       {units.length === 0 ? (
@@ -41,57 +38,45 @@ export default async function OwnerUnitsPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {units.map((unit) => (
-            <Card key={unit.id}>
-              <CardContent className="p-5">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">
-                      {unit.property_name} · {unit.unit_number}
-                    </p>
-                    <p className="text-sm text-[var(--muted-foreground)]">
-                      {unit.community_name}
-                      {unit.kind && ` · ${UNIT_KIND[unit.kind]}`}
-                    </p>
+            <Link key={unit.id} href={`/portal/owner/units/${unit.id}`} className="block">
+              <Card className="h-full transition-shadow hover:shadow-md">
+                <CardContent className="p-5">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">
+                        {unit.property_name} · {unit.unit_number}
+                      </p>
+                      <p className="text-sm text-[var(--muted-foreground)]">
+                        {unit.community_name}
+                        {unit.kind && ` · ${UNIT_KIND[unit.kind]}`}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {unit.status && <UnitStatusBadge status={unit.status} />}
+                      {unit.operating_mode && <OperatingModeBadge mode={unit.operating_mode} />}
+                      <ChevronRight className="size-4 text-[var(--muted-foreground)]" />
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {unit.status && <UnitStatusBadge status={unit.status} />}
-                    {unit.operating_mode && (
-                      <OperatingModeBadge mode={unit.operating_mode} />
-                    )}
-                  </div>
-                </div>
 
-                <FieldGrid columns={2}>
-                  <Field label="Bedrooms">{unit.bedrooms ?? "—"}</Field>
-                  <Field label="Size">
-                    {unit.size_sqft
-                      ? `${Math.round(Number(unit.size_sqft)).toLocaleString()} sqft`
-                      : "—"}
-                  </Field>
-                  <Field label="Current rent">
-                    <Money
-                      amount={unit.annual_rent_aed ?? unit.target_annual_rent_aed}
-                    />
-                  </Field>
-                  <Field label="Lease ends">{formatDate(unit.lease_end_date)}</Field>
-                </FieldGrid>
-
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
-                  {unit.ejari_status && (
-                    <EjariBadge
-                      status={unit.ejari_status}
-                      contractNumber={unit.lease_number}
-                    />
-                  )}
-                  {unit.det_permit_number && (
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      DET permit {unit.det_permit_number} · expires{" "}
-                      {formatDate(unit.det_permit_expiry)}
-                    </span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  <FieldGrid columns={2}>
+                    <Field label="Bedrooms">
+                      {Number(unit.bedrooms) === 0 ? "Studio" : (unit.bedrooms ?? "—")}
+                    </Field>
+                    <Field label="Size">
+                      {unit.size_sqft
+                        ? `${Math.round(Number(unit.size_sqft)).toLocaleString()} sqft`
+                        : "—"}
+                    </Field>
+                    <Field label="Max guests">{unit.max_guests ?? "—"}</Field>
+                    <Field label="DET permit">
+                      {unit.det_permit_number
+                        ? `${unit.det_permit_number} · to ${formatDate(unit.det_permit_expiry)}`
+                        : "—"}
+                    </Field>
+                  </FieldGrid>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

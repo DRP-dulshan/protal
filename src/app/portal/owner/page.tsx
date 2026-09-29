@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { Building2, Wallet, ShieldCheck, Wrench, FileText } from "lucide-react";
+import { Building2, CalendarDays, Moon, ShieldCheck, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth/session";
+import { requireRole, getPortalSettings } from "@/lib/auth/session";
 import { PageHeader, StatCard, EmptyState, Money } from "@/components/domain/shared";
 import {
   UnitStatusBadge,
-  StatementStatusBadge,
   ComplianceBadge,
   MaintenanceStatusBadge,
 } from "@/components/domain/status-badge";
@@ -19,65 +18,70 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatPeriod } from "@/lib/dates";
-import { formatAED } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
+import { addDays, dubaiToday, monthRange, nightsWithin } from "@/lib/calendar";
 import { COMPLIANCE_KIND } from "@/lib/labels";
+import { OwnerBookingsTable } from "./owner-bookings-table";
 
 export const metadata = { title: "My portfolio" };
 
+/**
+ * Owner home. Properties, stays and anything waiting on the owner - and no
+ * income, payouts or rates, by design and by database policy: every query
+ * here goes through an owner-safe view or a table that carries no revenue.
+ */
 export default async function OwnerPortalPage() {
   const profile = await requireRole(["owner"]);
   const supabase = await createClient();
+  const settings = await getPortalSettings();
 
-  // RLS scopes all of this to the units this login actually owns; no filtering
-  // by owner id is needed or trusted here.
-  const [unitsResult, statementsResult, complianceResult, maintenanceResult] =
+  const today = dubaiToday();
+  const { start: monthStart, end: monthEnd } = monthRange(today.slice(0, 7));
+
+  const [unitsResult, bookingsResult, complianceResult, maintenanceResult] =
     await Promise.all([
-      supabase.from("v_units_overview").select("*").eq("is_active", true),
+      supabase.from("owner_units_view").select("*").eq("is_active", true).order("property_name"),
       supabase
-        .from("owner_statements")
+        .from("owner_bookings_view")
         .select("*")
-        .in("status", ["issued", "approved", "paid"])
-        .order("period_start", { ascending: false })
-        .limit(6),
+        .gte("check_out", monthStart)
+        .order("check_in"),
       supabase
         .from("v_compliance_status")
         .select("*")
         .neq("severity", "ok")
         .order("days_remaining")
         .limit(6),
+      // Quotes are a cost the owner approves, not income, so they stay visible.
       supabase
         .from("maintenance_requests")
-        .select("id, ticket_number, title, status, quoted_amount_aed, owner_approval_required, owner_approved_at, unit_id")
+        .select("id, ticket_number, title, status, quoted_amount_aed, owner_approval_required, owner_approved_at, owner_rejected_at, unit_id")
         .not("status", "in", "(closed,cancelled,rejected)")
         .order("reported_at", { ascending: false })
         .limit(6),
     ]);
 
   const units = unitsResult.data ?? [];
-  const statements = statementsResult.data ?? [];
+  const bookings = bookingsResult.data ?? [];
   const compliance = complianceResult.data ?? [];
   const tickets = maintenanceResult.data ?? [];
 
-  const occupied = units.filter(
-    (u) => u.status === "occupied_long_term" || u.status === "listed_short_term"
-  ).length;
-  const occupancy = units.length ? Math.round((occupied / units.length) * 100) : 0;
-
-  const thisYear = new Date().getFullYear();
-  const ytdPayout = statements
-    .filter((s) => new Date(s.period_start).getFullYear() === thisYear)
-    .reduce((sum, s) => sum + Number(s.net_payout_aed), 0);
+  const upcoming = bookings.filter((b) => b.check_out! > today);
+  const next30 = upcoming.filter((b) => b.check_in! <= addDays(today, 30));
+  const nightsThisMonth = bookings.reduce(
+    (sum, b) => sum + nightsWithin(b.check_in!, b.check_out!, monthStart, monthEnd),
+    0
+  );
 
   const awaitingApproval = tickets.filter(
-    (t) => t.owner_approval_required && !t.owner_approved_at
+    (t) => t.owner_approval_required && !t.owner_approved_at && !t.owner_rejected_at
   );
 
   return (
     <>
       <PageHeader
         title={`Welcome, ${(profile.full_name || "Owner").split(" ")[0]}`}
-        description="Your properties, income and anything waiting on you."
+        description="Your properties, upcoming stays and anything waiting on you."
       />
 
       {awaitingApproval.length > 0 && (
@@ -107,22 +111,20 @@ export default async function OwnerPortalPage() {
         <StatCard
           label="My properties"
           value={units.length}
-          sublabel={`${occupied} generating income`}
           icon={<Building2 className="size-5" />}
           href="/portal/owner/units"
         />
         <StatCard
-          label="Occupancy"
-          value={`${occupancy}%`}
-          tone={occupancy >= 85 ? "success" : occupancy >= 60 ? "warning" : "danger"}
+          label="Stays in next 30 days"
+          value={next30.length}
+          icon={<CalendarDays className="size-5" />}
+          tone="brand"
+          href="/portal/owner/bookings"
         />
         <StatCard
-          label="Paid out this year"
-          value={formatAED(ytdPayout, { decimals: false })}
-          sublabel="Net of fees and expenses"
-          icon={<Wallet className="size-5" />}
-          tone="brand"
-          href="/portal/owner/statements"
+          label="Nights booked this month"
+          value={nightsThisMonth}
+          icon={<Moon className="size-5" />}
         />
         <StatCard
           label="Compliance"
@@ -132,6 +134,33 @@ export default async function OwnerPortalPage() {
           tone={compliance.length === 0 ? "success" : "warning"}
         />
       </div>
+
+      <Card className="mt-6">
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="size-4" />
+            Upcoming stays
+          </CardTitle>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/portal/owner/bookings">View all</Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {upcoming.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                title="No upcoming stays"
+                description="Confirmed bookings on your properties will appear here."
+              />
+            </div>
+          ) : (
+            <OwnerBookingsTable
+              bookings={upcoming.slice(0, 8)}
+              showGuestName={settings?.show_guest_first_name_to_owners ?? false}
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
@@ -157,7 +186,6 @@ export default async function OwnerPortalPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Rent</TableHead>
                     <TableHead className="text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -165,20 +193,16 @@ export default async function OwnerPortalPage() {
                   {units.slice(0, 6).map((unit) => (
                     <TableRow key={unit.id}>
                       <TableCell>
-                        <p className="truncate font-medium">
+                        <Link
+                          href={`/portal/owner/units/${unit.id}`}
+                          className="truncate font-medium hover:underline"
+                        >
                           {unit.property_name} · {unit.unit_number}
-                        </p>
+                        </Link>
                         <p className="text-xs text-[var(--muted-foreground)]">
-                          {unit.bedrooms} bed
-                          {unit.lease_end_date &&
-                            ` · lease ends ${formatDate(unit.lease_end_date)}`}
+                          {Number(unit.bedrooms) === 0 ? "Studio" : `${unit.bedrooms} bed`}
+                          {unit.community_name && ` · ${unit.community_name}`}
                         </p>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Money
-                          amount={unit.annual_rent_aed ?? unit.target_annual_rent_aed}
-                          compact
-                        />
                       </TableCell>
                       <TableCell className="text-right">
                         {unit.status && <UnitStatusBadge status={unit.status} />}
@@ -191,141 +215,100 @@ export default async function OwnerPortalPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="size-4" />
-              Recent statements
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/portal/owner/statements">View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            {statements.length === 0 ? (
-              <div className="p-5">
-                <EmptyState
-                  title="No statements yet"
-                  description="Your monthly statement appears here once it has been issued."
-                />
-              </div>
-            ) : (
+        {compliance.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Upcoming renewals</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead className="text-right">Net payout</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead>Due</TableHead>
                     <TableHead className="text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {statements.map((statement) => (
-                    <TableRow key={statement.id}>
+                  {compliance.map((item, i) => (
+                    <TableRow key={i}>
                       <TableCell>
-                        <Link
-                          href={`/portal/owner/statements/${statement.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {formatPeriod(statement.period_start, statement.period_end)}
-                        </Link>
+                        <p className="truncate font-medium">{item.label}</p>
                         <p className="text-xs text-[var(--muted-foreground)]">
-                          {statement.statement_number}
+                          {item.kind ? COMPLIANCE_KIND[item.kind] : ""}
                         </p>
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        <Money amount={statement.net_payout_aed} />
-                      </TableCell>
+                      <TableCell className="tabular text-sm">{formatDate(item.due_date)}</TableCell>
                       <TableCell className="text-right">
-                        <StatementStatusBadge status={statement.status} />
+                        <ComplianceBadge
+                          severity={item.severity ?? "missing"}
+                          daysRemaining={item.days_remaining}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {compliance.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Upcoming renewals</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {compliance.map((item, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <p className="truncate font-medium">{item.label}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {item.kind ? COMPLIANCE_KIND[item.kind] : ""}
-                      </p>
-                    </TableCell>
-                    <TableCell className="tabular text-sm">
-                      {formatDate(item.due_date)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ComplianceBadge
-                        severity={item.severity ?? "missing"}
-                        daysRemaining={item.days_remaining}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
       {tickets.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-base">Open maintenance</CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/portal/owner/maintenance">View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job</TableHead>
-                  <TableHead className="text-right">Quote</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tickets.map((ticket) => (
-                  <TableRow key={ticket.id}>
-                    <TableCell>
-                      <p className="truncate font-medium">{ticket.title}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {ticket.ticket_number}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Money amount={ticket.quoted_amount_aed} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <MaintenanceStatusBadge status={ticket.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="mt-6">
+          <MaintenanceCard tickets={tickets} />
+        </div>
       )}
     </>
+  );
+}
+
+function MaintenanceCard({
+  tickets,
+}: {
+  tickets: {
+    id: string;
+    ticket_number: string;
+    title: string;
+    status: Parameters<typeof MaintenanceStatusBadge>[0]["status"];
+    quoted_amount_aed: number | null;
+  }[];
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle className="text-base">Open maintenance</CardTitle>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/portal/owner/maintenance">View all</Link>
+        </Button>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Job</TableHead>
+              <TableHead className="text-right">Quote</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tickets.map((ticket) => (
+              <TableRow key={ticket.id}>
+                <TableCell>
+                  <p className="truncate font-medium">{ticket.title}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">{ticket.ticket_number}</p>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Money amount={ticket.quoted_amount_aed} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <MaintenanceStatusBadge status={ticket.status} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

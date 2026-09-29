@@ -101,13 +101,12 @@ export const CAPABILITIES: Record<Role, Capability[]> = {
     "leads.manage", "messages.send",
   ],
 
-  // Owners get a read-only portal, plus approval rights over spend on their
-  // own units and the ability to request work.
+  // Owners get a read-only portal - properties, calendars, stays - plus
+  // approval rights over spend on their own units and the ability to request
+  // work. Never income: no statements, no ledger, no lease rent (0014).
   owner: [
     "units.view",
-    "leases.view",
     "bookings.view",
-    "statements.view",
     "maintenance.view", "maintenance.raise", "maintenance.approve_owner",
     "documents.view",
     "compliance.view",

@@ -1,6 +1,6 @@
 import { Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole, getCompanySettings } from "@/lib/auth/session";
+import { requireRole, getPortalSettings } from "@/lib/auth/session";
 import { PageHeader, EmptyState, Money, Callout } from "@/components/domain/shared";
 import {
   MaintenanceStatusBadge,
@@ -17,7 +17,7 @@ export const metadata = { title: "Maintenance" };
 export default async function OwnerMaintenancePage() {
   await requireRole(["owner"]);
   const supabase = await createClient();
-  const settings = await getCompanySettings();
+  const settings = await getPortalSettings();
 
   const { data } = await supabase
     .from("maintenance_requests")

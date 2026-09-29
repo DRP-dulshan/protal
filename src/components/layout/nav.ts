@@ -71,7 +71,7 @@ export const OWNER_NAV: NavSection[] = [
     items: [
       { label: "Overview", href: "/portal/owner", icon: "LayoutDashboard", capability: "units.view" },
       { label: "My properties", href: "/portal/owner/units", icon: "Building2", capability: "units.view" },
-      { label: "Statements", href: "/portal/owner/statements", icon: "FileText", capability: "statements.view" },
+      { label: "Bookings", href: "/portal/owner/bookings", icon: "CalendarDays", capability: "bookings.view" },
       { label: "Maintenance", href: "/portal/owner/maintenance", icon: "Wrench", capability: "maintenance.view" },
       { label: "Documents", href: "/portal/owner/documents", icon: "FolderOpen", capability: "documents.view" },
     ],

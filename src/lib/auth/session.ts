@@ -111,7 +111,35 @@ export async function requireRole(roles: Role[]): Promise<Profile> {
   return profile;
 }
 
-/** Company-wide settings (VAT rate, fee defaults, branding, notice periods). */
+export interface PortalSettings {
+  trade_name: string;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  brand_primary_hex: string;
+  brand_accent_hex: string;
+  maintenance_owner_approval_threshold: number;
+  show_guest_first_name_to_owners: boolean;
+}
+
+/**
+ * The slice of company settings a portal user may see. Owners cannot read
+ * company_settings itself (it holds commission rates); portal_settings()
+ * returns only these columns.
+ */
+export const getPortalSettings = cache(async (): Promise<PortalSettings | null> => {
+  if (!isConfigured) return null;
+
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("portal_settings");
+  const rows = data as unknown as PortalSettings[] | null;
+  return rows?.[0] ?? null;
+});
+
+/**
+ * Company-wide settings (VAT rate, fee defaults, branding, notice periods).
+ * Staff only - RLS returns nothing to portal users; use getPortalSettings().
+ */
 export const getCompanySettings = cache(async () => {
   if (!isConfigured) return null;
 

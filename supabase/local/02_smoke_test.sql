@@ -21,19 +21,21 @@ set client_min_messages = notice;
 -- ---------------------------------------------------------------------------
 -- Fixtures
 -- ---------------------------------------------------------------------------
-insert into auth.users (id, email, raw_user_meta_data) values
+-- Roles live in raw_app_meta_data, which only the service key can write
+-- (0014). Roles in raw_user_meta_data are ignored - see TEST 12.
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
   ('11111111-1111-1111-1111-111111111111', 'admin@drp.ae',
-   '{"full_name":"Admin User","role":"super_admin"}'),
+   '{"full_name":"Admin User"}', '{"role":"super_admin"}'),
   ('22222222-2222-2222-2222-222222222222', 'pm@drp.ae',
-   '{"full_name":"Property Manager","role":"property_manager"}'),
+   '{"full_name":"Property Manager"}', '{"role":"property_manager"}'),
   ('33333333-3333-3333-3333-333333333333', 'owner.a@example.com',
-   '{"full_name":"Owner A","role":"owner"}'),
+   '{"full_name":"Owner A"}', '{"role":"owner"}'),
   ('44444444-4444-4444-4444-444444444444', 'owner.b@example.com',
-   '{"full_name":"Owner B","role":"owner"}'),
+   '{"full_name":"Owner B"}', '{"role":"owner"}'),
   ('55555555-5555-5555-5555-555555555555', 'tenant@example.com',
-   '{"full_name":"Tenant One","role":"tenant"}'),
+   '{"full_name":"Tenant One"}', '{"role":"tenant"}'),
   ('66666666-6666-6666-6666-666666666666', 'finance@drp.ae',
-   '{"full_name":"Accountant","role":"finance"}');
+   '{"full_name":"Accountant"}', '{"role":"finance"}');
 
 do $$
 declare
@@ -331,14 +333,15 @@ declare
   n_owner_a integer; n_owner_b integer; n_tenant integer; n_pm integer;
   n_other_lease integer;
 begin
-  -- Owner A should see exactly the one unit they own.
+  -- Owner A should see exactly the one unit they own - through the owner
+  -- view, since the units table itself carries rates (0014).
   set local role authenticated;
   perform set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', true);
-  select count(*) into n_owner_a from units;
+  select count(*) into n_owner_a from owner_units_view;
 
   -- Owner B likewise, and must not see Owner A's unit.
   perform set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
-  select count(*) into n_owner_b from units;
+  select count(*) into n_owner_b from owner_units_view;
 
   -- The tenant sees only the unit they lease.
   perform set_config('request.jwt.claim.sub', '55555555-5555-5555-5555-555555555555', true);

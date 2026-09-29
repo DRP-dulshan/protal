@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild the local validation database from scratch and run the smoke test.
+# Rebuild the local validation database from scratch and run the test suites.
 set -euo pipefail
 PGBIN="${PGBIN:-/c/Program Files/PostgreSQL/18/bin}"
 PORT="${PGPORT:-55432}"
@@ -11,4 +11,6 @@ psql -d "$DB" -v ON_ERROR_STOP=1 -q -f supabase/local/00_shim.sql
 for f in supabase/migrations/0*.sql; do
   psql -d "$DB" -v ON_ERROR_STOP=1 -q -f "$f"
 done
-psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/local/02_smoke_test.sql
+for f in supabase/local/0[2-9]_*test.sql; do
+  psql -d "$DB" -v ON_ERROR_STOP=1 -f "$f"
+done

@@ -245,6 +245,7 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          guest_count_known: boolean;
         };
         Insert: {
           id?: string;
@@ -281,6 +282,7 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          guest_count_known?: boolean;
         };
         Update: {
           id?: string;
@@ -317,6 +319,7 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          guest_count_known?: boolean;
         };
         Relationships: [
           {
@@ -493,6 +496,7 @@ export type Database = {
           display_currencies: string[];
           created_at: string;
           updated_at: string;
+          show_guest_first_name_to_owners: boolean;
         };
         Insert: {
           id?: boolean;
@@ -531,6 +535,7 @@ export type Database = {
           display_currencies?: string[];
           created_at?: string;
           updated_at?: string;
+          show_guest_first_name_to_owners?: boolean;
         };
         Update: {
           id?: boolean;
@@ -569,6 +574,7 @@ export type Database = {
           display_currencies?: string[];
           created_at?: string;
           updated_at?: string;
+          show_guest_first_name_to_owners?: boolean;
         };
         Relationships: [];
       };
@@ -4363,6 +4369,60 @@ export type Database = {
       };
     };
     Views: {
+      owner_bookings_view: {
+        Row: {
+          id: string | null;
+          unit_id: string | null;
+          unit_number: string | null;
+          property_name: string | null;
+          booking_number: string | null;
+          check_in: string | null;
+          check_out: string | null;
+          nights: number | null;
+          guests: number | null;
+          adults: number | null;
+          children: number | null;
+          infants: number | null;
+          source: Database["public"]["Enums"]["sales_channel"] | null;
+          status: Database["public"]["Enums"]["booking_status"] | null;
+          guest_first_name: string | null;
+        };
+        Relationships: [];
+      };
+      owner_calendar_blocks_view: {
+        Row: {
+          id: string | null;
+          unit_id: string | null;
+          start_date: string | null;
+          end_date: string | null;
+          reason: Database["public"]["Enums"]["block_reason"] | null;
+        };
+        Relationships: [];
+      };
+      owner_units_view: {
+        Row: {
+          id: string | null;
+          unit_number: string | null;
+          reference_code: string | null;
+          kind: Database["public"]["Enums"]["unit_kind"] | null;
+          floor: string | null;
+          bedrooms: number | null;
+          bathrooms: number | null;
+          size_sqft: number | null;
+          furnishing: Database["public"]["Enums"]["furnishing_status"] | null;
+          operating_mode: Database["public"]["Enums"]["operating_mode"] | null;
+          status: Database["public"]["Enums"]["unit_status"] | null;
+          max_guests: number | null;
+          is_active: boolean | null;
+          property_id: string | null;
+          property_name: string | null;
+          community_name: string | null;
+          det_permit_number: string | null;
+          det_permit_expiry: string | null;
+          cover_path: string | null;
+        };
+        Relationships: [];
+      };
       v_compliance_calendar: {
         Row: {
           kind: Database["public"]["Enums"]["compliance_kind"] | null;
@@ -4460,6 +4520,10 @@ export type Database = {
         Returns: unknown;
       };
       generate_owner_statement: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      portal_settings: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };

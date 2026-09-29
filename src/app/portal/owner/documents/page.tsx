@@ -9,7 +9,9 @@ export default async function OwnerDocumentsPage() {
   await requireRole(["owner"]);
   const supabase = await createClient();
 
-  // RLS returns only documents flagged owner-visible on units this login owns.
+  // RLS returns only documents flagged owner-visible on units this login owns,
+  // and never income records (statements, invoices, receipts, cheque copies,
+  // tenancy contracts, Ejari certificates) - see pms.is_income_document().
   const { data } = await supabase
     .from("documents")
     .select("*")
@@ -19,7 +21,7 @@ export default async function OwnerDocumentsPage() {
     <>
       <PageHeader
         title="My documents"
-        description="Title deeds, tenancy contracts, Ejari certificates, permits and management agreements for your properties."
+        description="Title deeds, permits and other documents D|R|P has shared for your properties."
       />
       <DocumentList
         documents={data ?? []}
