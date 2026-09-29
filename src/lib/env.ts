@@ -35,7 +35,10 @@ export const env = {
   ownerUrl: optional("OWNER_URL") ?? "http://owner.localhost:3000",
   // Portal served on a host with no admin./owner. prefix (preview deployments,
   // bare localhost). Unset in production so unknown hosts serve nothing.
-  portalFallback: optional("PORTAL_FALLBACK"),
+  // `next dev` defaults to the back office so http://localhost:3000 works.
+  portalFallback:
+    optional("PORTAL_FALLBACK") ??
+    (process.env.NODE_ENV === "development" ? "admin" : undefined),
 
   storage: {
     driver: (optional("STORAGE_DRIVER") ?? "supabase") as "supabase" | "s3",

@@ -17,6 +17,9 @@ cp .env.example .env.local     # fill in your Supabase values
 npm run dev
 ```
 
+Open http://localhost:3000 (or http://admin.localhost:3000) for the back
+office and http://owner.localhost:3000 for the owner portal.
+
 Without credentials the app serves `/setup`, which lists exactly what is
 missing — it will not crash with a stack trace.
 
