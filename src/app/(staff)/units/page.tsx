@@ -20,6 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ROW_LINK,
 } from "@/components/ui/table";
 import {
   UNIT_KIND,
@@ -197,11 +198,11 @@ export default async function UnitsPage({
             </TableHeader>
             <TableBody>
               {rows.map((unit) => (
-                <TableRow key={unit.id}>
+                <TableRow key={unit.id} className="relative cursor-pointer">
                   <TableCell>
                     <Link
                       href={`/units/${unit.id}`}
-                      className="font-medium hover:underline"
+                      className={ROW_LINK}
                     >
                       {unit.property_name} · {unit.unit_number}
                     </Link>

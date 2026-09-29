@@ -82,3 +82,12 @@ const TableCell = React.forwardRef<
 TableCell.displayName = "TableCell";
 
 export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell };
+
+/**
+ * Class for the one link in a table row that opens the row's record. Its
+ * ::after covers the whole row (the row needs `relative`), so a click anywhere
+ * on the row opens the record while the link stays the single, keyboard-
+ * reachable target.
+ */
+export const ROW_LINK =
+  "font-medium hover:underline after:absolute after:inset-0 after:content-['']";

@@ -17,6 +17,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ROW_LINK,
 } from "@/components/ui/table";
 import { formatDate, daysUntil } from "@/lib/dates";
 import {
@@ -178,11 +179,11 @@ export default async function LeasesPage({
                   days <= 90;
 
                 return (
-                  <TableRow key={lease.id}>
+                  <TableRow key={lease.id} className="relative cursor-pointer">
                     <TableCell>
                       <Link
                         href={`/leases/${lease.id}`}
-                        className="font-medium hover:underline"
+                        className={ROW_LINK}
                       >
                         {lease.lease_number}
                       </Link>

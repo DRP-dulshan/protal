@@ -17,6 +17,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ROW_LINK,
 } from "@/components/ui/table";
 import { formatDate } from "@/lib/dates";
 import { dubaiToday } from "@/lib/calendar";
@@ -204,9 +205,9 @@ export default async function BookingsPage({
             </TableHeader>
             <TableBody>
               {bookings.map((b) => (
-                <TableRow key={b.id}>
+                <TableRow key={b.id} className="relative cursor-pointer">
                   <TableCell>
-                    <Link href={`/bookings/${b.id}`} className="font-medium hover:underline">
+                    <Link href={`/bookings/${b.id}`} className={ROW_LINK}>
                       {b.booking_number}
                     </Link>
                     {b.external_booking_id && (
