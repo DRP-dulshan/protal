@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { dubaiToday, nightsBetween } from "@/lib/calendar";
+import { flushEmailsSoon } from "@/lib/notify/flush";
 
 export type ActionState = { error?: string; success?: string };
 
@@ -240,6 +241,7 @@ export async function createBooking(
 
   if (error) return { error: explain(error) };
 
+  flushEmailsSoon();
   revalidatePath("/bookings");
   revalidatePath(`/units/${input.unitId}`);
   redirect(`/bookings/${booking.id}`);
@@ -306,6 +308,7 @@ export async function changeBookingStatus(
   if (error) return { error: explain(error) };
   if (!changed?.length) return { error: "This booking could not be changed." };
 
+  flushEmailsSoon();
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath(`/units/${booking.unit_id}`);
@@ -405,4 +408,79 @@ export async function removeBlock(
 
   revalidatePath(`/units/${parsed.data.unitId}`);
   return { success: "Block removed. The dates are free again." };
+}
+
+// ---------------------------------------------------------------------------
+// Prices: Airbnb stays arrive from the calendar feed with dates only.
+// ---------------------------------------------------------------------------
+
+const priceSchema = z.object({
+  accommodation: money,
+  cleaningFee: money.default(0),
+  extraFees: money.default(0),
+  tourismDirham: money.default(0),
+  channelCommission: money.default(0),
+  guestName: z.string().trim().max(160).optional(),
+});
+
+/** Enters or corrects a booking's price. The payout is always derived. */
+export async function updateBookingPrice(
+  bookingId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) {
+    return { error: "You do not have permission to change booking prices." };
+  }
+  if (!z.string().uuid().safeParse(bookingId).success) return { error: "Booking not found." };
+
+  const parsed = priceSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the amounts and try again." };
+  }
+  const input = parsed.data;
+  const supabase = await createClient();
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, unit_id, check_in, check_out, guest_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { error: "Booking not found." };
+
+  let guestId = booking.guest_id;
+  if (!guestId && input.guestName && input.guestName.length >= 2) {
+    const { data: guest, error: guestError } = await supabase
+      .from("guests")
+      .insert({ full_name: input.guestName })
+      .select("id")
+      .single();
+    if (guestError) return { error: `Could not save the guest: ${guestError.message}` };
+    guestId = guest.id;
+  }
+
+  const nights = nightsBetween(booking.check_in, booking.check_out);
+  const gross = round2(input.accommodation + input.cleaningFee + input.extraFees + input.tourismDirham);
+  const { data: changed, error } = await supabase
+    .from("bookings")
+    .update({
+      guest_id: guestId,
+      accommodation_aed: input.accommodation,
+      nightly_rate_aed: nights > 0 ? round2(input.accommodation / nights) : null,
+      cleaning_fee_aed: input.cleaningFee,
+      extra_fees_aed: input.extraFees,
+      tourism_dirham_aed: input.tourismDirham,
+      channel_commission_aed: input.channelCommission,
+      gross_total_aed: gross,
+      payout_expected_aed: round2(gross - input.channelCommission - input.tourismDirham),
+    })
+    .eq("id", bookingId)
+    .select("id");
+  if (error) return { error: explain(error) };
+  if (!changed?.length) return { error: "This booking could not be changed." };
+
+  revalidatePath("/bookings");
+  revalidatePath(`/bookings/${bookingId}`);
+  return { success: "Price saved." };
 }

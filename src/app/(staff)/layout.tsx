@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { STAFF_NAV } from "@/components/layout/nav";
 import { requirePortalProfile } from "@/lib/auth/session";
+import { unreadNotificationCount } from "@/lib/notify/count";
 import { signOut } from "@/app/login/actions";
 
 /**
@@ -12,7 +13,10 @@ export default async function StaffLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await requirePortalProfile("admin");
+  const [profile, unread] = await Promise.all([
+    requirePortalProfile("admin"),
+    unreadNotificationCount(),
+  ]);
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
@@ -21,6 +25,7 @@ export default async function StaffLayout({
         role={profile.role}
         userName={profile.full_name || profile.email || "User"}
         signOutAction={signOut}
+        badges={{ "/notifications": unread }}
       />
       <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
     </div>

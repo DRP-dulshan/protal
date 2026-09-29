@@ -3,7 +3,7 @@ import { BedDouble, CalendarDays, LogIn, LogOut, Plus, Search } from "lucide-rea
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
-import { PageHeader, EmptyState, Money, StatCard } from "@/components/domain/shared";
+import { Callout, PageHeader, EmptyState, Money, StatCard } from "@/components/domain/shared";
 import { BookingStatusBadge, ChannelBadge } from "@/components/domain/status-badge";
 import { ExportButton } from "@/components/domain/export-button";
 import { Button } from "@/components/ui/button";
@@ -29,11 +29,14 @@ const VIEWS = {
   upcoming: "Upcoming and in-house",
   past: "Past stays",
   cancelled: "Cancelled and no-shows",
+  needs_price: "Needs a price",
   all: "All bookings",
 } as const;
 type View = keyof typeof VIEWS;
 
 const LIVE = ["inquiry", "tentative", "confirmed", "checked_in"] as const;
+/** Stays that happen or happened, i.e. that should have a price. */
+const PRICED = ["tentative", "confirmed", "checked_in", "checked_out"] as const;
 
 export default async function BookingsPage({
   searchParams,
@@ -56,6 +59,8 @@ export default async function BookingsPage({
       .in("status", ["checked_out", "checked_in", "confirmed"])
       .lt("check_out", today)
       .order("check_in", { ascending: false });
+  } else if (view === "needs_price") {
+    query = query.in("status", [...PRICED]).eq("gross_total_aed", 0).order("check_in");
   } else if (view === "cancelled") {
     query = query.in("status", ["cancelled", "no_show"]).order("check_in", { ascending: false });
   } else {
@@ -67,7 +72,7 @@ export default async function BookingsPage({
     query = query.or(`booking_number.ilike.%${term}%,external_booking_id.ilike.%${term}%`);
   }
 
-  const [profile, { data, error }, unitsResult, todayResult] = await Promise.all([
+  const [profile, { data, error }, unitsResult, unpricedResult, todayResult] = await Promise.all([
     requireCapability("bookings.view"),
     query.limit(500),
     supabase
@@ -76,6 +81,12 @@ export default async function BookingsPage({
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"])
       .order("property_name"),
+    // Stays still waiting for a price (Airbnb imports arrive without one).
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .in("status", [...PRICED])
+      .eq("gross_total_aed", 0),
     // Today's movements, whatever the filter.
     supabase
       .from("bookings")
@@ -91,6 +102,7 @@ export default async function BookingsPage({
   const departing = movements.filter((b) => b.check_out === today && b.status === "checked_in").length;
   const inHouse = movements.filter((b) => b.status === "checked_in" && b.check_out > today).length;
   const canManage = can(profile.role, "bookings.manage");
+  const unpriced = unpricedResult.count ?? 0;
 
   const exportRows = bookings.map((b) => ({
     Booking: b.booking_number,
@@ -131,6 +143,22 @@ export default async function BookingsPage({
         <StatCard label="Departing today" value={departing} icon={<LogOut className="size-4" />} />
         <StatCard label="In house" value={inHouse} icon={<BedDouble className="size-4" />} />
       </div>
+
+      {unpriced > 0 && view !== "needs_price" && (
+        <div className="mb-4">
+          <Callout
+            tone="warning"
+            title={`${unpriced} ${unpriced === 1 ? "stay has" : "stays have"} no price yet`}
+          >
+            Airbnb stays arrive from the calendar with dates only. Open one and use Enter
+            price to record what Airbnb pays out.{" "}
+            <Link href="/bookings?view=needs_price" className="underline underline-offset-2">
+              See them
+            </Link>
+            .
+          </Callout>
+        </div>
+      )}
 
       <Card className="mb-4">
         <CardContent className="p-3">
@@ -233,7 +261,11 @@ export default async function BookingsPage({
                     <BookingStatusBadge status={b.status} />
                   </TableCell>
                   <TableCell className="hidden text-right sm:table-cell">
-                    <Money amount={b.gross_total_aed} />
+                    {Number(b.gross_total_aed) === 0 && b.status !== "cancelled" && b.status !== "no_show" ? (
+                      <span className="text-xs text-[var(--warning)]">No price yet</span>
+                    ) : (
+                      <Money amount={b.gross_total_aed} />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

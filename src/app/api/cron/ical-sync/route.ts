@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { syncAllUnits } from "@/lib/ical/sync";
+import { sendQueuedEmails } from "@/lib/notify/email";
 import { env } from "@/lib/env";
 
 /**
@@ -33,7 +34,11 @@ async function handle(request: NextRequest) {
 
   const started = Date.now();
   try {
-    const results = await syncAllUnits(createAdminClient());
+    const client = createAdminClient();
+    const results = await syncAllUnits(client);
+    // New imports queue booking emails; send them, plus anything a staff
+    // action queued that was not sent at the time.
+    const emails = await sendQueuedEmails(client);
     const failed = results.filter((r) => !r.ok);
     return NextResponse.json({
       ok: failed.length === 0,
@@ -41,6 +46,7 @@ async function handle(request: NextRequest) {
       failed: failed.length,
       created: results.reduce((n, r) => n + (r.created ?? 0), 0),
       cancelled: results.reduce((n, r) => n + (r.cancelled ?? 0), 0),
+      emails,
       ms: Date.now() - started,
       errors: failed.map((r) => ({ unitId: r.unitId, errors: r.errors.slice(0, 3) })),
     });

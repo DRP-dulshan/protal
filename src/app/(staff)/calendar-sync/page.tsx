@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { PageHeader, EmptyState, Callout } from "@/components/domain/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -41,7 +42,7 @@ export default async function CalendarSyncPage() {
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"])
       .order("unit_number"),
-    supabase.from("v_units_overview").select("id, has_valid_permit").eq("is_active", true),
+    supabase.from("v_units_overview").select("id, has_valid_permit, owner_name").eq("is_active", true),
     supabase
       .from("bookings")
       .select("unit_id")
@@ -51,6 +52,7 @@ export default async function CalendarSyncPage() {
   ]);
 
   const permitted = new Map((permitsResult.data ?? []).map((u) => [u.id, u.has_valid_permit]));
+  const ownerOf = new Map((permitsResult.data ?? []).map((u) => [u.id, u.owner_name]));
   const flagged = new Map<string, number>();
   for (const b of flaggedResult.data ?? []) flagged.set(b.unit_id, (flagged.get(b.unit_id) ?? 0) + 1);
 
@@ -60,13 +62,27 @@ export default async function CalendarSyncPage() {
   const linked = units.filter((u) => u.airbnb_ical_url);
   const problems = linked.filter((u) => u.ical_last_status === "error").length;
   const canManage = can(profile.role, "bookings.manage");
+  const canAdd = can(profile.role, "properties.manage");
+  const addButton = canAdd ? (
+    <Button asChild variant={linked.length > 0 ? "outline" : "default"}>
+      <Link href="/calendar-sync/add">
+        <Plus className="size-4" />
+        Add Airbnb listings
+      </Link>
+    </Button>
+  ) : null;
 
   return (
     <>
       <PageHeader
         title="Calendar sync"
         description="Airbnb calendars are imported every 15 minutes. Each unit's export link keeps Airbnb closed on dates booked elsewhere."
-        actions={canManage && linked.length > 0 ? <SyncAllButton /> : undefined}
+        actions={
+          <>
+            {addButton}
+            {canManage && linked.length > 0 && <SyncAllButton />}
+          </>
+        }
       />
 
       {problems > 0 && (
@@ -81,8 +97,9 @@ export default async function CalendarSyncPage() {
       {units.length === 0 ? (
         <EmptyState
           title="No holiday-home units"
-          description="Units operated short-term (or both) appear here once they exist."
+          description="Add your Airbnb listings to bring them in as holiday-home units, with their calendars connected."
           icon={<RefreshCw className="size-8" />}
+          action={addButton ?? undefined}
         />
       ) : (
         <Card>
@@ -91,6 +108,7 @@ export default async function CalendarSyncPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Unit</TableHead>
+                  <TableHead className="hidden md:table-cell">Owner</TableHead>
                   <TableHead>Airbnb link</TableHead>
                   <TableHead>Last synced</TableHead>
                   <TableHead className="text-right">Events</TableHead>
@@ -111,6 +129,13 @@ export default async function CalendarSyncPage() {
                             <AlertTriangle className="size-3" />
                             {flags} Airbnb {flags === 1 ? "stay" : "stays"} without a DET permit
                           </p>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden text-sm md:table-cell">
+                        {ownerOf.get(u.id) ?? (
+                          <Link href={`/units/${u.id}/edit`} className="hover:underline">
+                            <Badge variant="warning">No owner</Badge>
+                          </Link>
                         )}
                       </TableCell>
                       <TableCell>

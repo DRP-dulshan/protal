@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { isAirbnbCalendarUrl, syncAllUnits, syncUnit, type SyncResult } from "@/lib/ical/sync";
+import { flushEmailsSoon } from "@/lib/notify/flush";
 
 export type SyncActionState = { error?: string; success?: string };
 
@@ -36,9 +37,11 @@ function describe(result: SyncResult): SyncActionState {
 }
 
 function refresh(id?: string) {
+  // A sync can import bookings, and each one queues notification emails.
+  flushEmailsSoon();
   if (id) revalidatePath(`/units/${id}`);
   revalidatePath("/bookings");
-  revalidatePath("/bookings/sync");
+  revalidatePath("/calendar-sync");
 }
 
 /** Saves (or clears) a unit's Airbnb calendar link, then syncs it straight away. */
