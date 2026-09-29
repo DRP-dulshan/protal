@@ -25,7 +25,15 @@ missing — it will not crash with a stack trace.
 
 ### Database
 
-Apply the migrations in `supabase/migrations/` in filename order, via the
+Put your Supabase connection string in `DATABASE_URL` in `.env.local`
+(Supabase → Connect → Session pooler), then install the schema and the demo
+data in one step:
+
+```bash
+npm run db:setup -- --seed
+```
+
+Or apply the migrations in `supabase/migrations/` in filename order, via the
 Supabase SQL editor or the CLI:
 
 ```bash
@@ -86,6 +94,7 @@ instead.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:rebuild` | Rebuild the local validation DB and run the smoke test |
 | `npm run db:types` | Regenerate TypeScript types from a database |
+| `npm run db:setup -- --seed` | Install the schema and demo data into the database in `DATABASE_URL` |
 | `npm run db:concat` | Regenerate `supabase/ALL_MIGRATIONS.sql` after adding a migration |
 
 ## Layout
