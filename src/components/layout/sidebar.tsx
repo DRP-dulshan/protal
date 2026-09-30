@@ -106,6 +106,17 @@ export function Sidebar({
             {ROLE_LABELS[role]}
           </p>
         </div>
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-[var(--muted-foreground)]"
+        >
+          <Link href="/auth/set-password">
+            <Icons.KeyRound className="size-4" />
+            Change password
+          </Link>
+        </Button>
         <form action={signOutAction}>
           <Button
             type="submit"

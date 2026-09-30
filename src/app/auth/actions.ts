@@ -17,14 +17,19 @@ const LINK_TYPES = new Set(["invite", "recovery"]);
 export async function confirmLink(formData: FormData) {
   const tokenHash = String(formData.get("token_hash") ?? "");
   const type = String(formData.get("type") ?? "");
-  if (!tokenHash || !LINK_TYPES.has(type)) redirect("/login?error=link_invalid");
+  // Errors stay on /auth/confirm: /login forwards anyone already signed in
+  // to their portal, which would hide the message.
+  if (!tokenHash || !LINK_TYPES.has(type)) redirect("/auth/confirm?error=link_invalid");
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
     token_hash: tokenHash,
     type: type as "invite" | "recovery",
   });
-  if (error) redirect("/login?error=link_invalid");
+  if (error) {
+    console.error(`[auth] sign-in link refused: ${error.code ?? error.status ?? "unknown"} ${error.message}`);
+    redirect("/auth/confirm?error=link_invalid");
+  }
 
   redirect("/auth/set-password");
 }
