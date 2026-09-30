@@ -99,6 +99,85 @@ export async function addPermit(
   return { success: `Permit ${input.permitNumber} recorded.` };
 }
 
+const PERMIT_STATUSES = ["draft", "pending", "active", "expired", "suspended", "cancelled"] as const;
+
+/** Corrects a recorded permit: a typo in the number, new dates, a suspension. */
+export async function updatePermit(
+  permitId: string,
+  unitId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "permits.manage")) {
+    return { error: "You do not have permission to change DET permits." };
+  }
+  if (!z.string().uuid().safeParse(permitId).success || !z.string().uuid().safeParse(unitId).success) {
+    return { error: "Permit not found." };
+  }
+  const parsed = permitSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
+  }
+  const status = z.enum(PERMIT_STATUSES).safeParse(formData.get("status"));
+  if (!status.success) return { error: "Choose the permit's status." };
+  const input = parsed.data;
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("holiday_home_permits")
+    .update({
+      permit_number: input.permitNumber,
+      det_classification: input.classification || null,
+      operator_name: input.operatorName || null,
+      operator_licence_number: input.operatorLicenceNumber || null,
+      issued_on: input.issuedOn,
+      expires_on: input.expiresOn,
+      // An active permit whose new expiry has passed is expired.
+      status: status.data === "active" && input.expiresOn < dubaiToday() ? "expired" : status.data,
+      noc_reference: input.nocReference || null,
+      noc_expires_on: input.nocExpiresOn ?? null,
+      notes: input.notes || null,
+    })
+    .eq("id", permitId)
+    .eq("unit_id", unitId)
+    .select("id");
+  if (error) return { error: explain(error) };
+  if (!data?.length) return { error: "This permit could not be changed. You may not have access to it." };
+
+  revalidatePath(`/units/${unitId}`);
+  revalidatePath("/units");
+  revalidatePath("/dashboard");
+  revalidatePath("/compliance");
+  return { success: `Permit ${input.permitNumber} updated.` };
+}
+
+/** Removes a permit recorded by mistake. Bookings keep the number they were made under. */
+export async function deletePermit(permitId: string, unitId: string): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "permits.manage")) {
+    return { error: "You do not have permission to change DET permits." };
+  }
+  if (!z.string().uuid().safeParse(permitId).success || !z.string().uuid().safeParse(unitId).success) {
+    return { error: "Permit not found." };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("holiday_home_permits")
+    .delete()
+    .eq("id", permitId)
+    .eq("unit_id", unitId)
+    .select("id");
+  if (error) return { error: explain(error) };
+  if (!data?.length) return { error: "This permit could not be removed. You may not have access to it." };
+
+  revalidatePath(`/units/${unitId}`);
+  revalidatePath("/units");
+  revalidatePath("/dashboard");
+  revalidatePath("/compliance");
+  return { success: "Permit removed." };
+}
+
 // ---------------------------------------------------------------------------
 // Bookings
 // ---------------------------------------------------------------------------
