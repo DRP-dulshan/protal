@@ -10,7 +10,7 @@ import { BookingStatusBadge, ChannelBadge } from "@/components/domain/status-bad
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/dates";
 import { SALES_CHANNEL } from "@/lib/labels";
-import { BookingActions } from "./booking-actions";
+import { BookingActions, DeleteBookingButton } from "./booking-actions";
 import { PriceDialog } from "./price-dialog";
 
 export const metadata = { title: "Booking" };
@@ -25,7 +25,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     supabase
       .from("bookings")
       .select(
-        "*, guests(id, full_name, email, phone, nationality, passport_number), units(id, unit_number, properties(name))"
+        "*, guests(id, full_name, email, phone, nationality, passport_number), units(id, unit_number, airbnb_ical_url, properties(name))"
       )
       .eq("id", id)
       .maybeSingle(),
@@ -49,9 +49,16 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         title={b.guests?.full_name ?? b.booking_number}
         description={`${b.booking_number} · ${unitLabel}`}
         actions={
-          can(profile.role, "bookings.manage") ? (
-            <BookingActions bookingId={b.id} status={b.status} />
-          ) : undefined
+          <>
+            {can(profile.role, "bookings.manage") && <BookingActions bookingId={b.id} status={b.status} />}
+            {profile.role === "super_admin" && (
+              <DeleteBookingButton
+                bookingId={b.id}
+                bookingNumber={b.booking_number}
+                reimported={Boolean(b.ical_uid && b.units?.airbnb_ical_url)}
+              />
+            )}
+          </>
         }
       />
 

@@ -471,6 +471,55 @@ export async function blockDates(
   return { success: "Dates blocked." };
 }
 
+/**
+ * Deletes a booking outright - for one entered by mistake or imported from
+ * the wrong Airbnb calendar. Super admins only, and never once money is
+ * recorded against it (ledger, invoice or payment): such a stay is cancelled
+ * instead, so the accounts keep their trail. Its calendar hold and
+ * notifications go with it; unfinished cleaning tasks for it are removed.
+ */
+export async function deleteBooking(bookingId: string): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (profile.role !== "super_admin") return { error: "Only a super admin can delete a booking." };
+  if (!z.string().uuid().safeParse(bookingId).success) return { error: "Booking not found." };
+
+  const supabase = await createClient();
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, booking_number, unit_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { error: "Booking not found." };
+
+  const money = await Promise.all(
+    (["ledger_entries", "invoices", "payments"] as const).map((table) =>
+      supabase.from(table).select("id", { count: "exact", head: true }).eq("booking_id", bookingId)
+    )
+  );
+  const failed = money.find((m) => m.error);
+  if (failed?.error) return { error: failed.error.message };
+  if (money.some((m) => (m.count ?? 0) > 0)) {
+    return {
+      error: "Money is recorded against this booking (ledger, invoice or payment), so it cannot be deleted. Cancel it instead.",
+    };
+  }
+
+  await supabase
+    .from("housekeeping_tasks")
+    .delete()
+    .eq("booking_id", bookingId)
+    .in("status", ["pending", "assigned"]);
+
+  const { data: removed, error } = await supabase.from("bookings").delete().eq("id", bookingId).select("id");
+  if (error) return { error: explain(error) };
+  if (!removed?.length) return { error: "This booking could not be deleted. You may not have access to its unit." };
+
+  revalidatePath("/bookings");
+  revalidatePath(`/units/${booking.unit_id}`);
+  revalidatePath("/dashboard");
+  redirect("/bookings");
+}
+
 const removeBlockSchema = z.object({ blockId: z.string().uuid(), unitId: z.string().uuid() });
 
 export async function removeBlock(

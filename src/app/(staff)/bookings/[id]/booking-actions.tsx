@@ -6,7 +6,8 @@ import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Enums } from "@/lib/db/database.types";
-import { changeBookingStatus, type ActionState } from "../actions";
+import { Trash2 } from "lucide-react";
+import { changeBookingStatus, deleteBooking, type ActionState } from "../actions";
 
 type Transition = "confirm" | "check_in" | "check_out" | "cancel" | "no_show";
 
@@ -97,5 +98,44 @@ export function BookingActions({
         <TransitionForm key={t} bookingId={bookingId} transition={t} action={action} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Deletes the booking after a confirmation (super admins only; the server
+ * refuses once money is recorded against it). An Airbnb stay whose unit is
+ * still linked to that calendar would simply be imported again, so the
+ * confirmation says so.
+ */
+export function DeleteBookingButton({
+  bookingId,
+  bookingNumber,
+  reimported,
+}: {
+  bookingId: string;
+  bookingNumber: string;
+  reimported: boolean;
+}) {
+  const [pending, start] = React.useTransition();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      disabled={pending}
+      onClick={() => {
+        const warning = reimported
+          ? "\n\nThis stay came from the unit's Airbnb calendar, which is still linked: the next sync will import it again. Remove the Airbnb link on the unit's Calendar tab first, or cancel the reservation on Airbnb."
+          : "";
+        if (!confirm(`Delete booking ${bookingNumber}? It is removed completely and its dates become free.${warning}`)) return;
+        start(async () => {
+          const result = await deleteBooking(bookingId);
+          if (result?.error) toast.error(result.error);
+        });
+      }}
+    >
+      <Trash2 className="size-4" />
+      {pending ? "Deleting…" : "Delete"}
+    </Button>
   );
 }
