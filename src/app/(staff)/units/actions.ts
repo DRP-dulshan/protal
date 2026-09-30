@@ -8,6 +8,7 @@ import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { dubaiToday } from "@/lib/calendar";
 import { propertySchema } from "../properties/schema";
+import { parseOwnerShares, planOwnership, type OwnerShare } from "@/lib/ownership";
 
 /** RLS filters rows silently: an update it refuses changes nothing and
  * reports no error, so a zero-row result is treated as refused. */
@@ -16,17 +17,11 @@ const NOT_CHANGED =
 
 export type ActionState = { error?: string; success?: string };
 
-const optionalUuid = z
-  .string()
-  .uuid()
-  .optional()
-  .or(z.literal("").transform(() => undefined));
-
 const blankOr = <T extends z.ZodTypeAny>(schema: T) =>
   z.union([z.literal("").transform(() => undefined), schema]).optional();
 
 const unitSchema = z.object({
-  // An existing property, or NEW_PROPERTY to create one from the fields below.
+  // An existing property, or "__new" to create one from the fields below.
   propertyId: z.union([z.string().uuid("Select a property"), z.literal("__new")], {
     message: "Select a property",
   }),
@@ -60,10 +55,8 @@ const unitSchema = z.object({
   cleaningFee: blankOr(z.coerce.number().min(0)),
   weeklyDiscount: blankOr(z.coerce.number().min(0).max(99, "A discount must be under 100%")),
   monthlyDiscount: blankOr(z.coerce.number().min(0).max(99, "A discount must be under 100%")),
-  // Ownership is captured at the same time: a unit with no owner cannot be
-  // billed, reported on, or shown in an owner portal.
-  ownerId: optionalUuid,
-  ownershipPct: z.coerce.number().min(0.01).max(100).default(100),
+  // Owners arrive as parallel ownerId / ownershipPct rows, read by
+  // ownerSharesFrom: a unit may have several, sharing at most 100%.
   notes: z.string().max(1000).optional(),
 });
 
@@ -124,6 +117,8 @@ export async function createUnit(
     return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
   }
   const input = parsed.data;
+  const { shares, error: sharesError } = ownerSharesFrom(formData);
+  if (sharesError) return { error: sharesError };
 
   const supabase = await createClient();
   const property = await resolveProperty(supabase, profile.role, input);
@@ -166,13 +161,15 @@ export async function createUnit(
     return { error: error.message };
   }
 
-  if (input.ownerId) {
-    const { error: ownershipError } = await supabase.from("unit_ownerships").insert({
-      unit_id: unit.id,
-      owner_id: input.ownerId,
-      ownership_pct: input.ownershipPct,
-      title_deed_number: input.titleDeedNumber || null,
-    });
+  if (shares.length) {
+    const { error: ownershipError } = await supabase.from("unit_ownerships").insert(
+      shares.map((share) => ({
+        unit_id: unit.id,
+        owner_id: share.ownerId,
+        ownership_pct: share.pct,
+        title_deed_number: input.titleDeedNumber || null,
+      }))
+    );
 
     if (ownershipError) {
       return {
@@ -201,6 +198,8 @@ export async function updateUnit(
     return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
   }
   const input = parsed.data;
+  const { shares, error: sharesError } = ownerSharesFrom(formData);
+  if (sharesError) return { error: sharesError };
   const supabase = await createClient();
   const property = await resolveProperty(supabase, profile.role, input);
   if ("error" in property) return { error: property.error };
@@ -248,10 +247,9 @@ export async function updateUnit(
   }
   if (!changed?.length) return { error: NOT_CHANGED };
 
-  // The form only offers the owner field when the unit has at most one active
-  // owner; shared ownership is left exactly as it is.
-  if (formData.has("ownerId")) {
-    const ownershipError = await syncSingleOwnership(supabase, unitId, input);
+  // Forms without the owners editor (none today) leave ownership alone.
+  if (formData.has("ownersEdited")) {
+    const ownershipError = await syncOwnership(supabase, unitId, shares, input.titleDeedNumber);
     if (ownershipError) return { error: `Unit saved, but ownership was not: ${ownershipError}` };
   }
 
@@ -260,14 +258,22 @@ export async function updateUnit(
   redirect(`/units/${unitId}`);
 }
 
+/** The owners editor's rows: parallel ownerId / ownershipPct fields. */
+function ownerSharesFrom(formData: FormData) {
+  return parseOwnerShares(formData.getAll("ownerId").map(String), formData.getAll("ownershipPct").map(String));
+}
+
 /**
- * Brings a single-owner unit's ownership in line with the form. A different
- * owner closes the current record (kept as history) and opens a new one.
+ * Brings a unit's active ownerships in line with the form. A removed owner's
+ * record is closed today and kept as history (deleted if it was only set
+ * today, i.e. a correction); changed shares are updated, smaller first, and
+ * new owners start today. The database still refuses shares above 100%.
  */
-async function syncSingleOwnership(
+async function syncOwnership(
   supabase: Awaited<ReturnType<typeof createClient>>,
   unitId: string,
-  input: z.infer<typeof unitSchema>
+  shares: OwnerShare[],
+  titleDeedNumber: string | undefined
 ): Promise<string | null> {
   const { data: active, error } = await supabase
     .from("unit_ownerships")
@@ -275,38 +281,30 @@ async function syncSingleOwnership(
     .eq("unit_id", unitId)
     .is("end_date", null);
   if (error) return error.message;
-  if ((active ?? []).length > 1) return null;
 
-  const current = active?.[0];
   const today = dubaiToday();
+  const plan = planOwnership(active ?? [], shares, today);
 
-  if (current && current.owner_id === input.ownerId) {
-    if (Number(current.ownership_pct) === input.ownershipPct) return null;
-    const { error: e } = await supabase
-      .from("unit_ownerships")
-      .update({ ownership_pct: input.ownershipPct })
-      .eq("id", current.id);
-    return e?.message ?? null;
-  }
-
-  if (current) {
-    // Changing the owner the same day it was set corrects a mistake: the
-    // wrong owner never owned the unit, so no history is kept for them.
-    const { error: e } =
-      current.start_date >= today
-        ? await supabase.from("unit_ownerships").delete().eq("id", current.id)
-        : await supabase.from("unit_ownerships").update({ end_date: today }).eq("id", current.id);
+  for (const { id, delete: remove } of plan.end) {
+    const { error: e } = remove
+      ? await supabase.from("unit_ownerships").delete().eq("id", id)
+      : await supabase.from("unit_ownerships").update({ end_date: today }).eq("id", id);
     if (e) return e.message;
   }
-
-  if (input.ownerId) {
-    const { error: e } = await supabase.from("unit_ownerships").insert({
-      unit_id: unitId,
-      owner_id: input.ownerId,
-      ownership_pct: input.ownershipPct,
-      title_deed_number: input.titleDeedNumber || null,
-      start_date: today,
-    });
+  for (const { id, pct } of plan.update) {
+    const { error: e } = await supabase.from("unit_ownerships").update({ ownership_pct: pct }).eq("id", id);
+    if (e) return e.message;
+  }
+  if (plan.add.length) {
+    const { error: e } = await supabase.from("unit_ownerships").insert(
+      plan.add.map((share) => ({
+        unit_id: unitId,
+        owner_id: share.ownerId,
+        ownership_pct: share.pct,
+        title_deed_number: titleDeedNumber || null,
+        start_date: today,
+      }))
+    );
     if (e) return e.message;
   }
   return null;

@@ -35,16 +35,11 @@ export default async function EditUnitPage({
   if (!unit) notFound();
 
   const active = ownershipResult.data ?? [];
-  const ownership: CurrentOwnership =
-    active.length > 1
-      ? "shared"
-      : active[0]
-        ? { ownerId: active[0].owner_id, pct: Number(active[0].ownership_pct) }
-        : null;
+  const ownership: CurrentOwnership = active.map((o) => ({ ownerId: o.owner_id, pct: Number(o.ownership_pct) }));
 
   // Archived properties and owners stay selectable only when this unit already
   // uses them, so saving never silently moves it.
-  const currentOwnerId = ownership && ownership !== "shared" ? ownership.ownerId : null;
+  const currentOwnerIds = new Set(ownership.map((o) => o.ownerId));
   const properties = (propertiesResult.data ?? [])
     .filter((p) => p.is_active || p.id === unit.property_id)
     .map((p) => ({
@@ -52,7 +47,7 @@ export default async function EditUnitPage({
       label: p.communities?.name ? `${p.name} — ${p.communities.name}` : p.name,
     }));
   const owners = (ownersResult.data ?? []).filter(
-    (o) => o.is_active || o.id === currentOwnerId
+    (o) => o.is_active || currentOwnerIds.has(o.id)
   );
 
   return (
