@@ -45,6 +45,10 @@ export function UnitForm({
   );
   const [state, action] = useActionState<ActionState, FormData>(submit, {});
   const [mode, setMode] = React.useState<string>(unit?.operating_mode ?? "long_term");
+  // "__new" adds the building together with the unit.
+  const [propertyChoice, setPropertyChoice] = React.useState<string>(
+    unit?.property_id ?? defaultPropertyId ?? (properties.length === 0 ? "__new" : "")
+  );
 
   React.useEffect(() => {
     if (state.error) toast.error(state.error);
@@ -60,32 +64,61 @@ export function UnitForm({
       <FormSection title="Location">
         <SelectField
           name="propertyId"
-          label="Property"
+          label="Building / property"
           required
-          defaultValue={unit?.property_id ?? defaultPropertyId ?? ""}
-          placeholder="Select a property"
-          options={properties.map((p) => ({ value: p.id, label: p.label }))}
-          hint={
-            properties.length === 0
-              ? "No properties yet — add one first."
-              : undefined
-          }
+          value={propertyChoice}
+          onChange={(e) => setPropertyChoice(e.target.value)}
+          placeholder="Select a building"
+          options={[
+            ...properties.map((p) => ({ value: p.id, label: p.label })),
+            { value: "__new", label: "+ New building (not in the list)" },
+          ]}
+          hint="Not in the list? Choose + New building and type its name here."
         />
+        {propertyChoice === "__new" && (
+          <>
+            <TextField
+              name="newPropertyName"
+              label="New building name"
+              required
+              maxLength={120}
+              placeholder="e.g. Azizi Riviera 12"
+            />
+            <TextField
+              name="newPropertyArea"
+              label="Area / community"
+              maxLength={80}
+              placeholder="e.g. Meydan"
+            />
+            <SelectField
+              name="newPropertyKind"
+              label="Building type"
+              defaultValue="building"
+              options={[
+                { value: "building", label: "Apartment building" },
+                { value: "villa_compound", label: "Villa compound" },
+                { value: "standalone_villa", label: "Standalone villa" },
+                { value: "townhouse_cluster", label: "Townhouses" },
+                { value: "mixed_use", label: "Mixed use" },
+              ]}
+            />
+          </>
+        )}
         <TextField
           name="unitNumber"
           label="Unit number"
           required
-          placeholder="1204"
+          placeholder="e.g. 1204"
           defaultValue={str(unit?.unit_number)}
         />
         <TextField
           name="referenceCode"
           label="Internal reference"
-          placeholder="DRP-MG1-1204"
+          placeholder="e.g. DRP-MG1-1204"
           hint="Optional D|R|P code, unique across the portfolio."
           defaultValue={str(unit?.reference_code)}
         />
-        <TextField name="floor" label="Floor" placeholder="12" defaultValue={str(unit?.floor)} />
+        <TextField name="floor" label="Floor" placeholder="e.g. 12" defaultValue={str(unit?.floor)} />
       </FormSection>
 
       <FormSection title="Specification" columns={3}>
@@ -141,7 +174,7 @@ export function UnitForm({
         <TextField
           name="viewDescription"
           label="View"
-          placeholder="Marina and sea view"
+          placeholder="e.g. Marina and sea view"
           defaultValue={str(unit?.view_description)}
         />
       </FormSection>
@@ -153,25 +186,25 @@ export function UnitForm({
         <TextField
           name="dewaPremiseNumber"
           label="DEWA premise number"
-          placeholder="3610234567"
+          placeholder="e.g. 3610234567"
           defaultValue={str(unit?.dewa_premise_number)}
         />
         <TextField
           name="titleDeedNumber"
           label="Title deed number"
-          placeholder="2019-1-234567"
+          placeholder="e.g. 2019-1-234567"
           defaultValue={str(unit?.title_deed_number)}
         />
         <TextField
           name="makaniNumber"
           label="Makani number"
-          placeholder="2648770179"
+          placeholder="e.g. 2648770179"
           defaultValue={str(unit?.makani_number)}
         />
         <TextField
           name="mollakUnitId"
           label="Mollak unit ID"
-          placeholder="MOL-U-11204"
+          placeholder="e.g. MOL-U-11204"
           defaultValue={str(unit?.mollak_unit_id)}
         />
       </FormSection>
@@ -194,7 +227,7 @@ export function UnitForm({
             type="number"
             step="0.01"
             min="0"
-            placeholder="145000"
+            placeholder="e.g. 145000"
             defaultValue={str(unit?.target_annual_rent_aed)}
           />
         )}
@@ -205,7 +238,7 @@ export function UnitForm({
             type="number"
             step="0.01"
             min="0"
-            placeholder="720"
+            placeholder="e.g. 720"
             defaultValue={str(unit?.base_nightly_rate_aed)}
             hint="Sunday to Thursday nights."
           />
@@ -228,7 +261,7 @@ export function UnitForm({
               type="number"
               step="0.01"
               min="0"
-              placeholder="0"
+              placeholder="e.g. 0"
               defaultValue={str(unit?.cleaning_fee_aed)}
               hint="Once per stay."
             />
@@ -239,7 +272,7 @@ export function UnitForm({
               step="0.01"
               min="0"
               max="99"
-              placeholder="0"
+              placeholder="e.g. 0"
               defaultValue={str(unit?.weekly_discount_pct)}
               hint="Stays of 7 nights or more."
             />
@@ -250,7 +283,7 @@ export function UnitForm({
               step="0.01"
               min="0"
               max="99"
-              placeholder="0"
+              placeholder="e.g. 0"
               defaultValue={str(unit?.monthly_discount_pct)}
               hint="Stays of 28 nights or more."
             />

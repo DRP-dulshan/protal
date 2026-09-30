@@ -26,7 +26,15 @@ const blankOr = <T extends z.ZodTypeAny>(schema: T) =>
   z.union([z.literal("").transform(() => undefined), schema]).optional();
 
 const unitSchema = z.object({
-  propertyId: z.string().uuid("Select a property"),
+  // An existing property, or NEW_PROPERTY to create one from the fields below.
+  propertyId: z.union([z.string().uuid("Select a property"), z.literal("__new")], {
+    message: "Select a property",
+  }),
+  newPropertyName: z.string().trim().max(120).optional(),
+  newPropertyArea: z.string().trim().max(80).optional(),
+  newPropertyKind: z
+    .enum(["building", "villa_compound", "standalone_villa", "townhouse_cluster", "mixed_use"])
+    .optional(),
   unitNumber: z.string().min(1, "Unit number is required").max(30),
   referenceCode: z.string().max(40).optional(),
   kind: z.enum([
@@ -36,7 +44,7 @@ const unitSchema = z.object({
   floor: z.string().max(10).optional(),
   bedrooms: z.coerce.number().min(0).max(20),
   bathrooms: z.coerce.number().min(0).max(20),
-  sizeSqft: z.coerce.number().min(0).optional(),
+  sizeSqft: blankOr(z.coerce.number().min(0)),
   furnishing: z.enum(["unfurnished", "semi_furnished", "fully_furnished"]),
   parkingSpaces: z.coerce.number().int().min(0).max(20).default(0),
   viewDescription: z.string().max(120).optional(),
@@ -45,8 +53,8 @@ const unitSchema = z.object({
   makaniNumber: z.string().max(20).optional(),
   mollakUnitId: z.string().max(40).optional(),
   operatingMode: z.enum(["long_term", "short_term", "both", "not_operating"]),
-  targetAnnualRent: z.coerce.number().min(0).optional(),
-  baseNightlyRate: z.coerce.number().min(0).optional(),
+  targetAnnualRent: blankOr(z.coerce.number().min(0)),
+  baseNightlyRate: blankOr(z.coerce.number().min(0)),
   // Holiday home prices for direct bookings; an empty box means not set.
   weekendRate: blankOr(z.coerce.number().min(0)),
   cleaningFee: blankOr(z.coerce.number().min(0)),
@@ -58,6 +66,49 @@ const unitSchema = z.object({
   ownershipPct: z.coerce.number().min(0.01).max(100).default(100),
   notes: z.string().max(1000).optional(),
 });
+
+/**
+ * The unit's property: the one chosen, or - when "New building" was picked -
+ * the one with that name (reused if it already exists), created with its
+ * area on the spot so a unit and its building can be added in one go.
+ */
+async function resolveProperty(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  role: Parameters<typeof can>[0],
+  input: z.infer<typeof unitSchema>
+): Promise<{ id: string } | { error: string }> {
+  if (input.propertyId !== "__new") return { id: input.propertyId };
+  if (!can(role, "properties.manage")) return { error: "You do not have permission to add buildings." };
+  const name = (input.newPropertyName ?? "").replace(/\s+/g, " ");
+  if (name.length < 2) return { error: "Enter the new building's name." };
+
+  const { data: existing } = await supabase
+    .from("properties")
+    .select("id, name")
+    .eq("is_active", true);
+  const match = (existing ?? []).find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+  if (match) return { id: match.id };
+
+  let communityId: string | null = null;
+  if (input.newPropertyArea) {
+    const { data: community, error } = await supabase
+      .from("communities")
+      .upsert({ name: input.newPropertyArea, emirate: "dubai" }, { onConflict: "name,emirate" })
+      .select("id")
+      .single();
+    if (error) return { error: `Could not save the area: ${error.message}` };
+    communityId = community.id;
+  }
+
+  const { data, error } = await supabase
+    .from("properties")
+    .insert({ name, kind: input.newPropertyKind ?? "building", community_id: communityId })
+    .select("id")
+    .single();
+  if (error) return { error: `Could not add the building: ${error.message}` };
+  revalidatePath("/properties");
+  return { id: data.id };
+}
 
 export async function createUnit(
   _prev: ActionState,
@@ -75,11 +126,13 @@ export async function createUnit(
   const input = parsed.data;
 
   const supabase = await createClient();
+  const property = await resolveProperty(supabase, profile.role, input);
+  if ("error" in property) return { error: property.error };
 
   const { data: unit, error } = await supabase
     .from("units")
     .insert({
-      property_id: input.propertyId,
+      property_id: property.id,
       unit_number: input.unitNumber,
       reference_code: input.referenceCode || null,
       kind: input.kind,
@@ -149,6 +202,8 @@ export async function updateUnit(
   }
   const input = parsed.data;
   const supabase = await createClient();
+  const property = await resolveProperty(supabase, profile.role, input);
+  if ("error" in property) return { error: property.error };
 
   // Fields for a pricing model the unit no longer uses are cleared, so a
   // stale nightly rate does not linger on a unit switched to long-term.
@@ -158,7 +213,7 @@ export async function updateUnit(
   const { data: changed, error } = await supabase
     .from("units")
     .update({
-      property_id: input.propertyId,
+      property_id: property.id,
       unit_number: input.unitNumber,
       reference_code: input.referenceCode || null,
       kind: input.kind,
