@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/session";
 import { portalHome, roleAllowedOnPortal } from "@/lib/portal";
 import { currentPortal, WRONG_PORTAL_PATH } from "@/lib/portal-server";
+import { env } from "@/lib/env";
 
 const LINK_TYPES = new Set(["invite", "recovery"]);
 
@@ -31,6 +32,15 @@ export async function confirmLink(formData: FormData) {
     redirect("/auth/confirm?error=link_invalid");
   }
 
+  // With owner passwords switched off the link itself is the sign-in: straight
+  // into the portal. last_login_at is left alone, so switching passwords on
+  // later still sends these owners to choose one.
+  if (!env.ownerPasswords) {
+    const [portal, profile] = await Promise.all([currentPortal(), getProfile()]);
+    redirect(
+      portal && profile && roleAllowedOnPortal(profile.role, portal) ? portalHome(portal) : "/auth/set-password"
+    );
+  }
   redirect("/auth/set-password");
 }
 

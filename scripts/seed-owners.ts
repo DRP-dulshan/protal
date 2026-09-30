@@ -186,8 +186,8 @@ async function applyRow(p: Plan): Promise<string> {
 
 async function emailRow(p: Plan): Promise<string> {
   const { row } = p;
-  // A recovery link signs the owner in once and leads to "set your password",
-  // exactly like the Give portal access button for an existing login.
+  // A recovery link signs the owner in once - into the portal, or to "set
+  // your password" when OWNER_PASSWORDS=on - exactly like Give portal access.
   const { data, error } = await db.auth.admin.generateLink({ type: "recovery", email: row.email });
   if (error || !data.properties) throw new Error(`link: ${error?.message ?? "not created"}`);
   const link = `${env.ownerUrl}/auth/confirm?${new URLSearchParams({
@@ -202,6 +202,7 @@ async function emailRow(p: Plan): Promise<string> {
     portalUrl: env.ownerUrl,
     company: companyResult.data,
     linkValidHours,
+    mode: env.ownerPasswords ? "password" : "link",
   });
   const result = await sendMessage({
     channel: "email",

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/layout/logo";
 import { confirmLink } from "../actions";
+import { env } from "@/lib/env";
 
 export const metadata = { title: "Set up your login" };
 
@@ -32,12 +33,18 @@ export default async function ConfirmPage({
               <>
                 <div>
                   <h1 className="text-lg font-semibold">
-                    {type === "invite" ? "Welcome to your owner portal" : "Reset your password"}
+                    {!env.ownerPasswords
+                      ? "Welcome to your owner portal"
+                      : type === "invite"
+                        ? "Welcome to your owner portal"
+                        : "Reset your password"}
                   </h1>
                   <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    {type === "invite"
-                      ? "Continue to choose the password you will use to sign in."
-                      : "Continue to choose a new password."}
+                    {!env.ownerPasswords
+                      ? "Continue to open your portal."
+                      : type === "invite"
+                        ? "Continue to choose the password you will use to sign in."
+                        : "Continue to choose a new password."}
                   </p>
                 </div>
                 <form action={confirmLink}>

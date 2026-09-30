@@ -146,6 +146,7 @@ export async function grantPortalAccess(
     link,
     portalUrl: env.ownerUrl,
     company: await companyForInvite(supabase),
+    mode: env.ownerPasswords ? "password" : "link",
   });
 
   const phone = owner.whatsapp ?? owner.phone;
@@ -206,6 +207,7 @@ export async function emailPortalInvite(
     link,
     portalUrl: env.ownerUrl,
     company: await companyForInvite(supabase),
+    mode: env.ownerPasswords ? "password" : "link",
   });
   const result = await sendMessage({
     channel: "email",

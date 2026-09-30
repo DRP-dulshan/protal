@@ -40,6 +40,12 @@ export const env = {
     optional("PORTAL_FALLBACK") ??
     (process.env.NODE_ENV === "development" ? "admin" : undefined),
 
+  // Owner passwords. Off (default): a sign-in link logs the owner straight
+  // into the portal. On: owners choose a password from the link and must have
+  // one to use the portal. Switch on with OWNER_PASSWORDS=on in Vercel, then
+  // redeploy.
+  ownerPasswords: optional("OWNER_PASSWORDS") === "on",
+
   // Shared secret for the scheduled endpoints (/api/cron/*). The scheduler
   // (Supabase pg_cron) sends it as "Authorization: Bearer <secret>".
   cronSecret: optional("CRON_SECRET"),

@@ -22,6 +22,11 @@ export interface InviteInput {
   company?: InviteCompany | null;
   /** How long the link works: Supabase -> Auth -> Email OTP expiry. Default 1. */
   linkValidHours?: number;
+  /**
+   * "password": the link leads to choosing a password (env.ownerPasswords on).
+   * "link": the link opens the portal directly; no password yet.
+   */
+  mode?: "password" | "link";
 }
 
 export interface InviteMessage {
@@ -49,7 +54,8 @@ function signature(company: InviteCompany | null | undefined): string[] {
 }
 
 export function buildPortalInvite(input: InviteInput): InviteMessage {
-  const { ownerName, email, link, portalUrl, company, linkValidHours = 1 } = input;
+  const { ownerName, email, link, portalUrl, company, linkValidHours = 1, mode = "password" } = input;
+  const direct = mode === "link";
   const validity = `${linkValidHours} ${linkValidHours === 1 ? "hour" : "hours"}`;
   const portalHost = portalUrl.replace(/^https?:\/\//, "");
   const subject = "Your D|R|P owner portal is ready";
@@ -59,15 +65,25 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
     "",
     "Welcome to the D|R|P owner portal. You can now see your properties, the booking calendar and upcoming stays online, at any time.",
     "",
-    "To get started, set your password here:",
-    link,
-    "",
-    `This link works once and expires after ${validity}. If it has expired, just ask us for a new one.`,
-    "",
-    "After that, sign in any time at:",
-    portalUrl,
-    `Email: ${email}`,
-    "",
+    ...(direct
+      ? [
+          "Open your owner portal here:",
+          link,
+          "",
+          `This link works once and expires after ${validity}. Whenever you need to open the portal again, just ask us for a new link.`,
+          "",
+        ]
+      : [
+          "To get started, set your password here:",
+          link,
+          "",
+          `This link works once and expires after ${validity}. If it has expired, just ask us for a new one.`,
+          "",
+          "After that, sign in any time at:",
+          portalUrl,
+          `Email: ${email}`,
+          "",
+        ]),
     "Kind regards,",
     ...signature(company),
   ].join("\n");
@@ -87,7 +103,7 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
 <title>${escape(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;">
-<div style="display:none;max-height:0;overflow:hidden;">Set your password to see your properties and bookings online.</div>
+<div style="display:none;max-height:0;overflow:hidden;">${direct ? "Open your portal" : "Set your password"} to see your properties and bookings online.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
 <tr><td align="center" style="padding:32px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
@@ -100,10 +116,10 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
     <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">Your D|R|P owner portal is ready. You can now follow your properties and their bookings online, at any time.</p>
   </td></tr>
   <tr><td align="center" style="padding:0 36px 12px;">
-    <a href="${escape(link)}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Set my password</a>
+    <a href="${escape(link)}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">${direct ? "Open my portal" : "Set my password"}</a>
   </td></tr>
   <tr><td align="center" style="padding:0 36px 28px;">
-    <p style="margin:0;font-size:12px;line-height:1.5;color:${MUTED};">This link works once and expires after ${validity}.<br>If it has expired, just ask us for a new one.</p>
+    <p style="margin:0;font-size:12px;line-height:1.5;color:${MUTED};">This link works once and expires after ${validity}.<br>${direct ? "Ask us for a new link whenever you need one." : "If it has expired, just ask us for a new one."}</p>
   </td></tr>
   <tr><td style="padding:0 36px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;">
@@ -117,7 +133,7 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
         .join("\n      ")}
     </table>
   </td></tr>
-  <tr><td style="padding:28px 36px 32px;">
+  ${direct ? `<tr><td style="padding:0 0 32px;"></td></tr>` : `<tr><td style="padding:28px 36px 32px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;">
       <tr><td style="padding:16px 20px;font-size:14px;line-height:1.6;color:${INK};">
         <strong>Signing in later</strong><br>
@@ -125,7 +141,7 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
         <span style="color:${MUTED};">Email:</span> ${escape(email)}
       </td></tr>
     </table>
-  </td></tr>
+  </td></tr>`}
   <tr><td align="center" style="background:${NAVY};padding:24px;font-size:12px;line-height:1.7;color:#d1d5db;">
     ${signature(company).map(escape).join("<br>")}
   </td></tr>

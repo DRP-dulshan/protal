@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { env } from "@/lib/env";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Lock, Pencil } from "lucide-react";
@@ -203,6 +204,7 @@ export default async function OwnerDetailPage({
               defaultEmail={owner.email}
               logins={logins}
               canManage={can(profile.role, "users.manage")}
+              passwords={env.ownerPasswords}
             />
 
             <Card>

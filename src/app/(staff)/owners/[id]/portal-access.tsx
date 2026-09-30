@@ -70,11 +70,14 @@ export function PortalAccess({
   defaultEmail,
   logins,
   canManage,
+  passwords,
 }: {
   ownerId: string;
   defaultEmail: string | null;
   logins: PortalLogin[];
   canManage: boolean;
+  /** env.ownerPasswords: whether the link leads to choosing a password. */
+  passwords: boolean;
 }) {
   const [state, action] = useActionState<PortalAccessState, FormData>(grantPortalAccess, {});
 
@@ -157,8 +160,9 @@ export function PortalAccess({
             </div>
             <Submit hasLogin={logins.length > 0} />
             <p className="text-xs text-[var(--muted-foreground)]">
-              Creates a one-time link for the owner to set their own password. Use it
-              again any time an owner forgets their password.
+              {passwords
+                ? "Creates a one-time link for the owner to set their own password. Use it again any time an owner forgets their password."
+                : "Creates a one-time link that opens the owner portal directly. Create a new one each time the owner needs to open it."}
             </p>
           </form>
         )}
