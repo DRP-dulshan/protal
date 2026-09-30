@@ -12,6 +12,7 @@ import {
   FormError,
 } from "@/components/domain/form";
 import { createUnit, updateUnit, type ActionState } from "../actions";
+import { OwnersEditor } from "./owners-editor";
 import type { Tables } from "@/lib/db/database.types";
 import {
   UNIT_KIND,
@@ -20,8 +21,8 @@ import {
   optionsFrom,
 } from "@/lib/labels";
 
-/** Today's owner of a unit being edited; "shared" when it has several. */
-export type CurrentOwnership = { ownerId: string; pct: number } | "shared" | null;
+/** Today's owners of a unit being edited, with their shares. */
+export type CurrentOwnership = { ownerId: string; pct: number }[];
 
 const str = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 
@@ -30,7 +31,7 @@ export function UnitForm({
   owners,
   defaultPropertyId,
   unit,
-  ownership = null,
+  ownership = [],
 }: {
   properties: { id: string; label: string }[];
   owners: { id: string; full_name: string }[];
@@ -293,38 +294,9 @@ export function UnitForm({
 
       <FormSection
         title="Ownership"
-        description="A unit with no owner cannot be billed or reported on, and will not appear in any owner portal."
+        description="One or more owners with their shares. A unit with no owner cannot be billed or reported on, and will not appear in any owner portal."
       >
-        {ownership === "shared" ? (
-          <p className="text-sm text-[var(--muted-foreground)] sm:col-span-2">
-            This unit has more than one owner, so ownership is not changed here.
-          </p>
-        ) : (
-          <>
-            <SelectField
-              name="ownerId"
-              label="Owner"
-              placeholder={unit ? "No owner" : "Link later"}
-              defaultValue={ownership?.ownerId ?? ""}
-              options={owners.map((o) => ({ value: o.id, label: o.full_name }))}
-              hint={
-                unit
-                  ? "Choosing a different owner ends the current ownership today and keeps it as history."
-                  : undefined
-              }
-            />
-            <TextField
-              name="ownershipPct"
-              label="Ownership share (%)"
-              type="number"
-              step="0.01"
-              min="0.01"
-              max="100"
-              defaultValue={ownership ? str(ownership.pct) : "100"}
-              hint="Shares across owners of one unit cannot exceed 100%."
-            />
-          </>
-        )}
+        <OwnersEditor owners={owners} initial={ownership} editing={Boolean(unit)} />
         <TextAreaField name="notes" label="Notes" rows={3} defaultValue={str(unit?.notes)} />
       </FormSection>
 
