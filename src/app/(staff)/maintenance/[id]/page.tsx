@@ -13,6 +13,7 @@ import { formatDate } from "@/lib/dates";
 import { MAINTENANCE_CATEGORY, TICKET_KIND } from "@/lib/labels";
 import { toTicketNotes } from "@/lib/tickets/notes";
 import { DetailsCard, StatusCard } from "./ticket-panel";
+import { DeleteTicketButton } from "./delete-ticket";
 
 export const metadata = { title: "Ticket" };
 
@@ -72,6 +73,11 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         breadcrumb={[{ label: "Repairs & complaints", href: "/maintenance" }, { label: t.ticket_number }]}
         title={t.title}
         description={`${t.ticket_number} · ${unitLabel}`}
+        actions={
+          (profile.role === "super_admin" || profile.role === "property_manager") && (
+            <DeleteTicketButton ticketId={t.id} ticketNumber={t.ticket_number} />
+          )
+        }
       />
 
       <div className="mb-5 flex flex-wrap gap-2">
