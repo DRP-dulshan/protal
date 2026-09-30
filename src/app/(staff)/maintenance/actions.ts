@@ -183,3 +183,30 @@ export async function updateTicketDetails(
       : "Saved.",
   };
 }
+
+/**
+ * Removes a ticket completely: its timeline and notifications go with it.
+ * For tickets raised by mistake or as a test; a real job that is not going
+ * ahead should be Cancelled instead, so its history stays.
+ */
+export async function deleteTicket(ticketId: string): Promise<ActionState> {
+  const profile = await requireProfile();
+  // Matches the database rule (pms.is_manager).
+  if (profile.role !== "super_admin" && profile.role !== "property_manager") {
+    return { error: "Only a super admin or property manager can delete a ticket." };
+  }
+  if (!z.string().uuid().safeParse(ticketId).success) return { error: "Ticket not found." };
+
+  const supabase = await createClient();
+  const { data: removed, error } = await supabase
+    .from("maintenance_requests")
+    .delete()
+    .eq("id", ticketId)
+    .select("id");
+  if (error) return { error: explain(error) };
+  if (!removed?.length) return { error: NOT_CHANGED };
+
+  revalidatePath("/maintenance");
+  revalidatePath("/dashboard");
+  redirect("/maintenance");
+}
