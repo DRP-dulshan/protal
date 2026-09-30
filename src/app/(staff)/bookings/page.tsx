@@ -101,9 +101,14 @@ export default async function BookingsPage({
 
   const bookings = data ?? [];
   const movements = todayResult.data ?? [];
+  // By dates, not status: Airbnb stays stay "Confirmed" unless someone
+  // checks the guest in, but the guest is there all the same.
   const arriving = movements.filter((b) => b.check_in === today && b.status === "confirmed").length;
-  const departing = movements.filter((b) => b.check_out === today && b.status === "checked_in").length;
-  const inHouse = movements.filter((b) => b.status === "checked_in" && b.check_out > today).length;
+  const departing = movements.filter((b) => b.check_out === today).length;
+  // Today's arrivals count once checked in; until then they are "arriving".
+  const inHouse = movements.filter(
+    (b) => b.check_out > today && (b.check_in < today || b.status === "checked_in")
+  ).length;
   const canManage = can(profile.role, "bookings.manage");
   const unpriced = unpricedResult.count ?? 0;
 
