@@ -7,7 +7,7 @@ import type { Capability } from "@/lib/auth/rbac";
  * database would refuse the data anyway.
  *
  * Only routes that exist are listed. Phase 2 surfaces still without a screen
- * (housekeeping, the maintenance queue, the standalone document vault) have
+ * (housekeeping, the standalone document vault) have
  * their tables, constraints and RLS in place; they are added here as they are
  * built rather than left as dead links.
  */
@@ -38,6 +38,12 @@ export const STAFF_NAV: NavSection[] = [
       { label: "Properties", href: "/properties", icon: "Building2", capability: "units.view" },
       { label: "Units", href: "/units", icon: "DoorOpen", capability: "units.view" },
       { label: "Owners", href: "/owners", icon: "Users", capability: "owners.view" },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Repairs & complaints", href: "/maintenance", icon: "Wrench", capability: "maintenance.view" },
     ],
   },
   {
@@ -82,7 +88,7 @@ export const OWNER_NAV: NavSection[] = [
       { label: "My properties", href: "/portal/owner/units", icon: "Building2", capability: "units.view" },
       { label: "Calendar", href: "/portal/owner/calendar", icon: "CalendarRange", capability: "bookings.view" },
       { label: "Bookings", href: "/portal/owner/bookings", icon: "CalendarDays", capability: "bookings.view" },
-      { label: "Maintenance", href: "/portal/owner/maintenance", icon: "Wrench", capability: "maintenance.view" },
+      { label: "Repairs & complaints", href: "/portal/owner/maintenance", icon: "Wrench", capability: "maintenance.view" },
       { label: "Documents", href: "/portal/owner/documents", icon: "FolderOpen", capability: "documents.view" },
     ],
   },

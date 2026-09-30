@@ -1,4 +1,5 @@
-import { Wrench } from "lucide-react";
+import Link from "next/link";
+import { Plus, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, getPortalSettings } from "@/lib/auth/session";
 import { PageHeader, EmptyState, Money, Callout } from "@/components/domain/shared";
@@ -6,13 +7,14 @@ import {
   MaintenanceStatusBadge,
   PriorityBadge,
 } from "@/components/domain/status-badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApprovalButtons } from "./approval-buttons";
 import { formatDate } from "@/lib/dates";
 import { formatAED } from "@/lib/money";
-import { MAINTENANCE_CATEGORY } from "@/lib/labels";
+import { MAINTENANCE_CATEGORY, TICKET_KIND } from "@/lib/labels";
 
-export const metadata = { title: "Maintenance" };
+export const metadata = { title: "Repairs & complaints" };
 
 export default async function OwnerMaintenancePage() {
   const supabase = await createClient();
@@ -37,8 +39,16 @@ export default async function OwnerMaintenancePage() {
   return (
     <>
       <PageHeader
-        title="Maintenance"
-        description={`Work on your properties. Anything quoted above ${formatAED(threshold, { decimals: false })} needs your approval before it starts.`}
+        title="Repairs & complaints"
+        description={`Repairs and complaints on your properties. Anything quoted above ${formatAED(threshold, { decimals: false })} needs your approval before it starts.`}
+        actions={
+          <Button asChild>
+            <Link href="/portal/owner/maintenance/new">
+              <Plus className="size-4" />
+              Report an issue
+            </Link>
+          </Button>
+        }
       />
 
       {awaiting.length > 0 && (
@@ -54,7 +64,11 @@ export default async function OwnerMaintenancePage() {
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <CardTitle className="text-base">{ticket.title}</CardTitle>
+                      <CardTitle className="text-base">
+                        <Link href={`/portal/owner/maintenance/${ticket.id}`} className="hover:underline">
+                          {ticket.title}
+                        </Link>
+                      </CardTitle>
                       <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                         {ticket.units?.properties?.name} · {ticket.units?.unit_number}
                         {" · "}
@@ -110,24 +124,30 @@ export default async function OwnerMaintenancePage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">All maintenance</CardTitle>
+          <CardTitle className="text-base">All repairs and complaints</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {others.length === 0 ? (
             <EmptyState
               title="Nothing to show"
-              description="Work raised on your properties appears here, with its status and cost."
+              description="Report a repair or a complaint and follow it here, with its status and cost."
               icon={<Wrench className="size-8" />}
             />
           ) : (
             others.map((ticket) => (
               <div
                 key={ticket.id}
-                className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3 last:border-0 last:pb-0"
+                className="relative flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3 last:border-0 last:pb-0"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{ticket.title}</p>
+                  <Link
+                    href={`/portal/owner/maintenance/${ticket.id}`}
+                    className="block truncate font-medium hover:underline after:absolute after:inset-0 after:content-['']"
+                  >
+                    {ticket.title}
+                  </Link>
                   <p className="truncate text-xs text-[var(--muted-foreground)]">
+                    {TICKET_KIND[ticket.kind as keyof typeof TICKET_KIND] ?? ticket.kind} ·{" "}
                     {ticket.units?.properties?.name} · {ticket.units?.unit_number} ·{" "}
                     {formatDate(ticket.reported_at)}
                   </p>
