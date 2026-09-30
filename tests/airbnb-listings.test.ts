@@ -28,8 +28,8 @@ test("filled rows are kept with their form position; empty rows are skipped", ()
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(rows, [
-    { row: 1, building: "Marina Gate 1", unitNumber: "2807", bedrooms: 2, link: LINK_A },
-    { row: 3, building: "Palm Views", unitNumber: "S-04", bedrooms: 0, link: LINK_B },
+    { row: 1, building: "Marina Gate 1", unitNumber: "2807", bedrooms: 2, link: LINK_A, prices: {} },
+    { row: 3, building: "Palm Views", unitNumber: "S-04", bedrooms: 0, link: LINK_B, prices: {} },
   ]);
 });
 
@@ -55,4 +55,28 @@ test("each problem names its row, and nothing passes until all are fixed", () =>
 
 test("an empty form asks for a listing", () => {
   assert.deepEqual(parseListingRows(form([["", "", "1", ""]])).errors, ["Add at least one listing."]);
+});
+
+test("prices are optional; those filled in are kept, bad ones name their row", () => {
+  const base = form([
+    ["Marina Gate 1", "2807", "1", LINK_A],
+    ["Palm Views", "S-04", "0", LINK_B],
+  ]);
+  const ok = parseListingRows({
+    ...base,
+    nightly: ["340", ""],
+    weekend: ["347", ""],
+    cleaning: ["", ""],
+    weeklyDiscount: ["5", ""],
+    monthlyDiscount: ["15", ""],
+  });
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.rows[0].prices, { nightly: 340, weekend: 347, weeklyDiscount: 5, monthlyDiscount: 15 });
+  assert.deepEqual(ok.rows[1].prices, {});
+
+  const bad = parseListingRows({ ...base, nightly: ["-1", ""], monthlyDiscount: ["", "150"] });
+  assert.deepEqual(bad.errors, [
+    "Row 1: the nightly price must be a number of 0 or more.",
+    "Row 2: the monthly discount must be a number from 0 to 99.",
+  ]);
 });

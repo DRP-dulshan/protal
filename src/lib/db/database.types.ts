@@ -4051,6 +4051,10 @@ export type Database = {
           ical_last_status: string | null;
           ical_last_error: string | null;
           ical_last_event_count: number | null;
+          weekend_rate_aed: number | null;
+          cleaning_fee_aed: number | null;
+          weekly_discount_pct: number | null;
+          monthly_discount_pct: number | null;
         };
         Insert: {
           id?: string;
@@ -4091,6 +4095,10 @@ export type Database = {
           ical_last_status?: string | null;
           ical_last_error?: string | null;
           ical_last_event_count?: number | null;
+          weekend_rate_aed?: number | null;
+          cleaning_fee_aed?: number | null;
+          weekly_discount_pct?: number | null;
+          monthly_discount_pct?: number | null;
         };
         Update: {
           id?: string;
@@ -4131,6 +4139,10 @@ export type Database = {
           ical_last_status?: string | null;
           ical_last_error?: string | null;
           ical_last_event_count?: number | null;
+          weekend_rate_aed?: number | null;
+          cleaning_fee_aed?: number | null;
+          weekly_discount_pct?: number | null;
+          monthly_discount_pct?: number | null;
         };
         Relationships: [
           {

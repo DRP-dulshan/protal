@@ -14,13 +14,17 @@ import {
 import { Callout } from "@/components/domain/shared";
 import { createBooking, type ActionState } from "../actions";
 import { SALES_CHANNEL, optionsFrom } from "@/lib/labels";
-import { nightsBetween } from "@/lib/calendar";
+import { quoteStay, stayDiscountPct } from "@/lib/pricing";
 import { formatAED } from "@/lib/money";
 
 export type BookableUnit = {
   id: string;
   label: string;
   nightlyRate: number | null;
+  weekendRate: number | null;
+  cleaningFee: number | null;
+  weeklyDiscountPct: number | null;
+  monthlyDiscountPct: number | null;
   hasValidPermit: boolean;
 };
 
@@ -47,11 +51,13 @@ export function BookingForm({
   const [guestId, setGuestId] = React.useState("");
   const [checkIn, setCheckIn] = React.useState("");
   const [checkOut, setCheckOut] = React.useState("");
-  const [rate, setRate] = React.useState(() => {
-    const unit = units.find((u) => u.id === defaultUnitId);
-    return unit?.nightlyRate ? String(unit.nightlyRate) : "";
-  });
-  const [cleaning, setCleaning] = React.useState("");
+  const initial = units.find((u) => u.id === defaultUnitId);
+  const [rate, setRate] = React.useState(initial?.nightlyRate ? String(initial.nightlyRate) : "");
+  const [weekendRate, setWeekendRate] = React.useState(initial?.weekendRate ? String(initial.weekendRate) : "");
+  // Follows the unit's weekly/monthly discount for the chosen dates until
+  // staff type their own.
+  const [discount, setDiscount] = React.useState<string | null>(null);
+  const [cleaning, setCleaning] = React.useState(initial?.cleaningFee ? String(initial.cleaningFee) : "");
   const [extra, setExtra] = React.useState("");
   const [tourism, setTourism] = React.useState("");
   const [commission, setCommission] = React.useState("");
@@ -61,8 +67,19 @@ export function BookingForm({
   }, [state]);
 
   const unit = units.find((u) => u.id === unitId);
-  const nights = checkIn && checkOut && checkOut > checkIn ? nightsBetween(checkIn, checkOut) : 0;
-  const accommodation = nights * num(rate);
+  const validDates = Boolean(checkIn && checkOut && checkOut > checkIn);
+  const autoDiscount = validDates && unit
+    ? stayDiscountPct(quoteStay(checkIn, checkOut, { nightly: 0 }).nights, {
+        weeklyDiscountPct: unit.weeklyDiscountPct,
+        monthlyDiscountPct: unit.monthlyDiscountPct,
+      })
+    : 0;
+  const discountValue = discount ?? (autoDiscount ? String(autoDiscount) : "");
+  const quote = validDates
+    ? quoteStay(checkIn, checkOut, { nightly: num(rate), weekend: num(weekendRate) }, num(discountValue))
+    : null;
+  const nights = quote?.nights ?? 0;
+  const accommodation = quote?.accommodation ?? 0;
   const gross = accommodation + num(cleaning) + num(extra) + num(tourism);
   const payout = gross - num(commission) - num(tourism);
 
@@ -79,7 +96,10 @@ export function BookingForm({
           onChange={(e) => {
             setUnitId(e.target.value);
             const next = units.find((u) => u.id === e.target.value);
-            if (next?.nightlyRate) setRate(String(next.nightlyRate));
+            setRate(next?.nightlyRate ? String(next.nightlyRate) : "");
+            setWeekendRate(next?.weekendRate ? String(next.weekendRate) : "");
+            setCleaning(next?.cleaningFee ? String(next.cleaningFee) : "");
+            setDiscount(null);
           }}
           placeholder={units.length === 0 ? "No holiday home units yet" : "Select a unit"}
           options={units.map((u) => ({
@@ -162,7 +182,7 @@ export function BookingForm({
 
       <FormSection
         title="Price (AED)"
-        description="The nightly rate is prefilled from the unit. Tourism Dirham is collected for the government and not paid out."
+        description="Prices are prefilled from the unit (Units → Edit). Tourism Dirham is collected for the government and not paid out."
         columns={3}
       >
         <TextField
@@ -174,6 +194,30 @@ export function BookingForm({
           required
           value={rate}
           onChange={(e) => setRate(e.target.value)}
+          hint="Sunday to Thursday nights"
+        />
+        <TextField
+          name="weekendRate"
+          label="Weekend rate"
+          type="number"
+          step="0.01"
+          min="0"
+          value={weekendRate}
+          onChange={(e) => setWeekendRate(e.target.value)}
+          placeholder="Same as nightly"
+          hint="Friday and Saturday nights"
+        />
+        <TextField
+          name="discountPct"
+          label="Discount (%)"
+          type="number"
+          step="0.01"
+          min="0"
+          max="99"
+          value={discountValue}
+          onChange={(e) => setDiscount(e.target.value)}
+          placeholder="0"
+          hint={autoDiscount ? `The unit's ${nights >= 28 ? "monthly" : "weekly"} discount` : "Off the nights, not the fees"}
         />
         <TextField
           name="cleaningFee"
@@ -215,9 +259,32 @@ export function BookingForm({
         <TextField name="damageDeposit" label="Damage deposit" type="number" step="0.01" min="0" />
 
         <div className="rounded-lg bg-[var(--muted)] p-3 text-sm sm:col-span-3">
+          {quote && quote.weekdayNights > 0 && (
+            <div className="flex justify-between">
+              <span>
+                {quote.weekdayNights} weeknight{quote.weekdayNights === 1 ? "" : "s"} × {formatAED(num(rate))}
+              </span>
+              <span className="tabular">{formatAED(quote.weekdayNights * num(rate))}</span>
+            </div>
+          )}
+          {quote && quote.weekendNights > 0 && (
+            <div className="flex justify-between">
+              <span>
+                {quote.weekendNights} weekend night{quote.weekendNights === 1 ? "" : "s"} ×{" "}
+                {formatAED(num(weekendRate) || num(rate))}
+              </span>
+              <span className="tabular">{formatAED(quote.weekendNights * (num(weekendRate) || num(rate)))}</span>
+            </div>
+          )}
+          {quote && quote.discount > 0 && (
+            <div className="flex justify-between text-[var(--success)]">
+              <span>Discount ({quote.discountPct}%)</span>
+              <span className="tabular">-{formatAED(quote.discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>
-              Accommodation ({nights} night{nights === 1 ? "" : "s"} × {formatAED(num(rate))})
+              Accommodation ({nights} night{nights === 1 ? "" : "s"})
             </span>
             <span className="tabular">{formatAED(accommodation)}</span>
           </div>

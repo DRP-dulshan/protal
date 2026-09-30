@@ -22,6 +22,9 @@ const optionalUuid = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
+const blankOr = <T extends z.ZodTypeAny>(schema: T) =>
+  z.union([z.literal("").transform(() => undefined), schema]).optional();
+
 const unitSchema = z.object({
   propertyId: z.string().uuid("Select a property"),
   unitNumber: z.string().min(1, "Unit number is required").max(30),
@@ -44,6 +47,11 @@ const unitSchema = z.object({
   operatingMode: z.enum(["long_term", "short_term", "both", "not_operating"]),
   targetAnnualRent: z.coerce.number().min(0).optional(),
   baseNightlyRate: z.coerce.number().min(0).optional(),
+  // Holiday home prices for direct bookings; an empty box means not set.
+  weekendRate: blankOr(z.coerce.number().min(0)),
+  cleaningFee: blankOr(z.coerce.number().min(0)),
+  weeklyDiscount: blankOr(z.coerce.number().min(0).max(99, "A discount must be under 100%")),
+  monthlyDiscount: blankOr(z.coerce.number().min(0).max(99, "A discount must be under 100%")),
   // Ownership is captured at the same time: a unit with no owner cannot be
   // billed, reported on, or shown in an owner portal.
   ownerId: optionalUuid,
@@ -89,6 +97,10 @@ export async function createUnit(
       operating_mode: input.operatingMode,
       target_annual_rent_aed: input.targetAnnualRent ?? null,
       base_nightly_rate_aed: input.baseNightlyRate ?? null,
+      weekend_rate_aed: input.weekendRate ?? null,
+      cleaning_fee_aed: input.cleaningFee ?? null,
+      weekly_discount_pct: input.weeklyDiscount ?? null,
+      monthly_discount_pct: input.monthlyDiscount ?? null,
       notes: input.notes || null,
     })
     .select("id")
@@ -164,6 +176,10 @@ export async function updateUnit(
       operating_mode: input.operatingMode,
       target_annual_rent_aed: annual ? (input.targetAnnualRent ?? null) : null,
       base_nightly_rate_aed: nightly ? (input.baseNightlyRate ?? null) : null,
+      weekend_rate_aed: nightly ? (input.weekendRate ?? null) : null,
+      cleaning_fee_aed: nightly ? (input.cleaningFee ?? null) : null,
+      weekly_discount_pct: nightly ? (input.weeklyDiscount ?? null) : null,
+      monthly_discount_pct: nightly ? (input.monthlyDiscount ?? null) : null,
       notes: input.notes || null,
     })
     .eq("id", unitId)

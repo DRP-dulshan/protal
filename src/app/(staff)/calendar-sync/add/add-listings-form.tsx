@@ -19,10 +19,37 @@ interface Row {
   unitNumber: string;
   bedrooms: string;
   link: string;
+  nightly: string;
+  weekend: string;
+  cleaning: string;
+  weeklyDiscount: string;
+  monthlyDiscount: string;
 }
 
+type PriceKey = "nightly" | "weekend" | "cleaning" | "weeklyDiscount" | "monthlyDiscount";
+
+/** Optional prices for direct bookings, as on Airbnb's Pricing page. */
+const PRICE_INPUTS: { key: PriceKey; label: string; placeholder: string; max?: number }[] = [
+  { key: "nightly", label: "Per night (AED)", placeholder: "e.g. 340" },
+  { key: "weekend", label: "Weekend (AED)", placeholder: "e.g. 347" },
+  { key: "cleaning", label: "Cleaning (AED)", placeholder: "e.g. 150" },
+  { key: "weeklyDiscount", label: "Weekly disc. %", placeholder: "e.g. 5", max: 99 },
+  { key: "monthlyDiscount", label: "Monthly disc. %", placeholder: "e.g. 15", max: 99 },
+];
+
 let nextKey = 0;
-const emptyRow = (link = ""): Row => ({ key: nextKey++, building: "", unitNumber: "", bedrooms: "1", link });
+const emptyRow = (link = ""): Row => ({
+  key: nextKey++,
+  building: "",
+  unitNumber: "",
+  bedrooms: "1",
+  link,
+  nightly: "",
+  weekend: "",
+  cleaning: "",
+  weeklyDiscount: "",
+  monthlyDiscount: "",
+});
 
 const BEDROOMS = [
   ["0", "Studio"],
@@ -215,7 +242,7 @@ export function AddListingsForm({ buildings }: { buildings: string[] }) {
                         list="buildings"
                         value={row.building}
                         onChange={(e) => update(row.key, { building: e.target.value })}
-                        placeholder="Marina Gate 1"
+                        placeholder="e.g. Marina Gate 1"
                       />
                     </div>
                     <div className="space-y-1">
@@ -225,7 +252,7 @@ export function AddListingsForm({ buildings }: { buildings: string[] }) {
                         name="unitNumber"
                         value={row.unitNumber}
                         onChange={(e) => update(row.key, { unitNumber: e.target.value })}
-                        placeholder="2807"
+                        placeholder="e.g. 2807"
                       />
                     </div>
                     <div className="space-y-1">
@@ -256,6 +283,31 @@ export function AddListingsForm({ buildings }: { buildings: string[] }) {
                       className="font-mono text-xs"
                     />
                   </div>
+                  <fieldset className="mt-3">
+                    <legend className="mb-1 text-xs text-[var(--muted-foreground)]">
+                      Prices for direct bookings (optional - copy them from the listing&apos;s Pricing on Airbnb)
+                    </legend>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      {PRICE_INPUTS.map((f) => (
+                        <div key={f.key} className="space-y-1">
+                          <Label htmlFor={`${f.key}-${row.key}`} className="text-xs">
+                            {f.label}
+                          </Label>
+                          <Input
+                            id={`${f.key}-${row.key}`}
+                            name={f.key}
+                            type="number"
+                            min="0"
+                            max={f.max}
+                            step="0.01"
+                            value={row[f.key]}
+                            onChange={(e) => update(row.key, { [f.key]: e.target.value })}
+                            placeholder={f.placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
                 </div>
               );
             })}

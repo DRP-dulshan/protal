@@ -356,6 +356,21 @@ export default async function UnitDetailPage({
                     {unit.dld_property_number ?? "—"}
                   </Field>
                   <Field label="Mollak unit ID">{unit.mollak_unit_id ?? "—"}</Field>
+                  {isShortTerm && (
+                    <>
+                      <Field label="Nightly / weekend rate">
+                        {unit.base_nightly_rate_aed ? <Money amount={unit.base_nightly_rate_aed} /> : "—"}
+                        {" / "}
+                        {unit.weekend_rate_aed ? <Money amount={unit.weekend_rate_aed} /> : "same"}
+                      </Field>
+                      <Field label="Cleaning fee">
+                        {unit.cleaning_fee_aed ? <Money amount={unit.cleaning_fee_aed} /> : "—"}
+                      </Field>
+                      <Field label="Weekly / monthly discount">
+                        {Number(unit.weekly_discount_pct ?? 0)}% / {Number(unit.monthly_discount_pct ?? 0)}%
+                      </Field>
+                    </>
+                  )}
                 </FieldGrid>
               </CardContent>
             </Card>
