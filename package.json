@@ -15,6 +15,7 @@
     "db:setup": "node scripts/db-setup.mjs",
     "db:migrate": "node scripts/db-setup.mjs",
     "db:cron": "node scripts/setup-cron.mjs",
+    "owners:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/test-loader.mjs scripts/seed-owners.ts",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/test-loader.mjs --test \"tests/**/*.test.ts\""
   },
   "dependencies": {

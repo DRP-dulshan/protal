@@ -20,6 +20,8 @@ export interface InviteInput {
   /** The owner portal's address, for signing in afterwards. */
   portalUrl: string;
   company?: InviteCompany | null;
+  /** How long the link works: Supabase -> Auth -> Email OTP expiry. Default 1. */
+  linkValidHours?: number;
 }
 
 export interface InviteMessage {
@@ -47,7 +49,8 @@ function signature(company: InviteCompany | null | undefined): string[] {
 }
 
 export function buildPortalInvite(input: InviteInput): InviteMessage {
-  const { ownerName, email, link, portalUrl, company } = input;
+  const { ownerName, email, link, portalUrl, company, linkValidHours = 1 } = input;
+  const validity = `${linkValidHours} ${linkValidHours === 1 ? "hour" : "hours"}`;
   const portalHost = portalUrl.replace(/^https?:\/\//, "");
   const subject = "Your D|R|P owner portal is ready";
 
@@ -59,7 +62,7 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
     "To get started, set your password here:",
     link,
     "",
-    "This link works once and expires after 1 hour. If it has expired, just ask us for a new one.",
+    `This link works once and expires after ${validity}. If it has expired, just ask us for a new one.`,
     "",
     "After that, sign in any time at:",
     portalUrl,
@@ -100,7 +103,7 @@ export function buildPortalInvite(input: InviteInput): InviteMessage {
     <a href="${escape(link)}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Set my password</a>
   </td></tr>
   <tr><td align="center" style="padding:0 36px 28px;">
-    <p style="margin:0;font-size:12px;line-height:1.5;color:${MUTED};">This link works once and expires after 1 hour.<br>If it has expired, just ask us for a new one.</p>
+    <p style="margin:0;font-size:12px;line-height:1.5;color:${MUTED};">This link works once and expires after ${validity}.<br>If it has expired, just ask us for a new one.</p>
   </td></tr>
   <tr><td style="padding:0 36px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;">
