@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/layout/logo";
 import { getProfile } from "@/lib/auth/session";
+import { portalHome, roleAllowedOnPortal } from "@/lib/portal";
+import { currentPortal } from "@/lib/portal-server";
 import { setPassword } from "../actions";
 
 export const metadata = { title: "Choose a password" };
@@ -16,7 +19,10 @@ const ERRORS: Record<string, string> = {
   failed: "The password could not be saved. Please try again.",
 };
 
-/** Reached from a sign-in link once it has been confirmed. */
+/**
+ * Choosing a password: the first time, straight after a sign-in link (or when
+ * the owner portal finds none was ever set), and later from "Change password".
+ */
 export default async function SetPasswordPage({
   searchParams,
 }: {
@@ -27,6 +33,10 @@ export default async function SetPasswordPage({
 
   const { error: code } = await searchParams;
   const error = code ? (ERRORS[code] ?? ERRORS.failed) : null;
+  // A password has been chosen before once there is a sign-in stamp.
+  const changing = Boolean(profile.last_login_at);
+  const portal = await currentPortal();
+  const home = portal && roleAllowedOnPortal(profile.role, portal) ? portalHome(portal) : null;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[var(--muted)] p-4">
@@ -39,7 +49,9 @@ export default async function SetPasswordPage({
           <CardContent className="p-6">
             <form action={setPassword} className="space-y-4">
               <div>
-                <h1 className="text-lg font-semibold">Choose your password</h1>
+                <h1 className="text-lg font-semibold">
+                  {changing ? "Change your password" : "Choose your password"}
+                </h1>
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                   You will sign in as {profile.email}.
                 </p>
@@ -81,6 +93,11 @@ export default async function SetPasswordPage({
               <Button type="submit" className="w-full">
                 Save and continue
               </Button>
+              {changing && home && (
+                <Button asChild variant="ghost" className="w-full">
+                  <Link href={home}>Back</Link>
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>

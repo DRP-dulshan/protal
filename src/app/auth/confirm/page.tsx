@@ -14,10 +14,10 @@ export const metadata = { title: "Set up your login" };
 export default async function ConfirmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token_hash?: string; type?: string }>;
+  searchParams: Promise<{ token_hash?: string; type?: string; error?: string }>;
 }) {
-  const { token_hash: tokenHash, type } = await searchParams;
-  const valid = Boolean(tokenHash) && (type === "invite" || type === "recovery");
+  const { token_hash: tokenHash, type, error } = await searchParams;
+  const valid = !error && Boolean(tokenHash) && (type === "invite" || type === "recovery");
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-[var(--muted)] p-4">
@@ -47,6 +47,17 @@ export default async function ConfirmPage({
                     Continue
                   </Button>
                 </form>
+              </>
+            ) : error ? (
+              <>
+                <h1 className="text-lg font-semibold">This link has expired</h1>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Sign-in links work once and only for a limited time. Ask D|R|P to send
+                  you a new one.
+                </p>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/login">Go to sign in</Link>
+                </Button>
               </>
             ) : (
               <>

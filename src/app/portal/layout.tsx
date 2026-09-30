@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OWNER_NAV } from "@/components/layout/nav";
 import { requirePortalProfile } from "@/lib/auth/session";
@@ -18,6 +19,12 @@ export default async function PortalLayout({
     requirePortalProfile("owner"),
     unreadNotificationCount(),
   ]);
+
+  // last_login_at is written only by a password sign-in (login/actions) and
+  // by setPassword (auth/actions). An owner with a session but no stamp got in
+  // through a one-time link without choosing a password, so they choose one
+  // before the portal opens - otherwise they could never sign in again.
+  if (!profile.last_login_at) redirect("/auth/set-password");
 
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
