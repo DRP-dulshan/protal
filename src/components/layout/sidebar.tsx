@@ -23,6 +23,7 @@ export function Sidebar({
   userName,
   signOutAction,
   badges = {},
+  showChangePassword = true,
 }: {
   sections: NavSection[];
   role: Role;
@@ -30,6 +31,8 @@ export function Sidebar({
   signOutAction: () => Promise<void>;
   /** Counts shown beside nav items, keyed by href (e.g. unread notifications). */
   badges?: Record<string, number>;
+  /** Off in the owner portal while owners sign in by link only. */
+  showChangePassword?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
@@ -106,17 +109,19 @@ export function Sidebar({
             {ROLE_LABELS[role]}
           </p>
         </div>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-[var(--muted-foreground)]"
-        >
-          <Link href="/auth/set-password">
-            <Icons.KeyRound className="size-4" />
-            Change password
-          </Link>
-        </Button>
+        {showChangePassword && (
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-[var(--muted-foreground)]"
+          >
+            <Link href="/auth/set-password">
+              <Icons.KeyRound className="size-4" />
+              Change password
+            </Link>
+          </Button>
+        )}
         <form action={signOutAction}>
           <Button
             type="submit"
