@@ -207,7 +207,54 @@ export function UnitForm({
             min="0"
             placeholder="720"
             defaultValue={str(unit?.base_nightly_rate_aed)}
+            hint="Sunday to Thursday nights."
           />
+        )}
+        {showNightly && (
+          <>
+            <TextField
+              name="weekendRate"
+              label="Weekend rate (AED)"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Same as nightly"
+              defaultValue={str(unit?.weekend_rate_aed)}
+              hint="Friday and Saturday nights."
+            />
+            <TextField
+              name="cleaningFee"
+              label="Cleaning fee (AED)"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0"
+              defaultValue={str(unit?.cleaning_fee_aed)}
+              hint="Once per stay."
+            />
+            <TextField
+              name="weeklyDiscount"
+              label="Weekly discount (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="99"
+              placeholder="0"
+              defaultValue={str(unit?.weekly_discount_pct)}
+              hint="Stays of 7 nights or more."
+            />
+            <TextField
+              name="monthlyDiscount"
+              label="Monthly discount (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="99"
+              placeholder="0"
+              defaultValue={str(unit?.monthly_discount_pct)}
+              hint="Stays of 28 nights or more."
+            />
+          </>
         )}
       </FormSection>
 

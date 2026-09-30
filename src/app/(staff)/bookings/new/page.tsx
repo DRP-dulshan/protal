@@ -13,7 +13,7 @@ export default async function NewBookingPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const [, unitsResult, guestsResult] = await Promise.all([
+  const [, unitsResult, guestsResult, pricesResult] = await Promise.all([
 
     requireCapability("bookings.manage"),
     supabase
@@ -24,12 +24,22 @@ export default async function NewBookingPage({
       .order("property_name")
       .order("unit_number"),
     supabase.from("guests").select("id, full_name").order("full_name").limit(1000),
+    supabase
+      .from("units")
+      .select("id, weekend_rate_aed, cleaning_fee_aed, weekly_discount_pct, monthly_discount_pct")
+      .eq("is_active", true)
+      .in("operating_mode", ["short_term", "both"]),
   ]);
+  const prices = new Map((pricesResult.data ?? []).map((p) => [p.id, p]));
 
   const units = (unitsResult.data ?? []).map((u) => ({
     id: u.id!,
     label: `${u.property_name} · ${u.unit_number}`,
     nightlyRate: u.base_nightly_rate_aed,
+    weekendRate: prices.get(u.id!)?.weekend_rate_aed ?? null,
+    cleaningFee: prices.get(u.id!)?.cleaning_fee_aed ?? null,
+    weeklyDiscountPct: prices.get(u.id!)?.weekly_discount_pct ?? null,
+    monthlyDiscountPct: prices.get(u.id!)?.monthly_discount_pct ?? null,
     hasValidPermit: Boolean(u.has_valid_permit),
   }));
 

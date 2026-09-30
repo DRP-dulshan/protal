@@ -8,7 +8,25 @@ export interface ListingRow {
   unitNumber: string;
   bedrooms: number;
   link: string;
+  /** Direct-booking prices; only those filled in. */
+  prices: ListingPrices;
 }
+
+export interface ListingPrices {
+  nightly?: number;
+  weekend?: number;
+  cleaning?: number;
+  weeklyDiscount?: number;
+  monthlyDiscount?: number;
+}
+
+const PRICE_FIELDS: { key: keyof ListingPrices; label: string; max?: number }[] = [
+  { key: "nightly", label: "nightly price" },
+  { key: "weekend", label: "weekend price" },
+  { key: "cleaning", label: "cleaning fee" },
+  { key: "weeklyDiscount", label: "weekly discount", max: 99 },
+  { key: "monthlyDiscount", label: "monthly discount", max: 99 },
+];
 
 export const MAX_LISTINGS = 30;
 
@@ -31,7 +49,7 @@ export function parseListingRows(fields: {
   unitNumber: string[];
   bedrooms: string[];
   link: string[];
-}): { rows: ListingRow[]; errors: string[] } {
+} & Partial<Record<keyof ListingPrices, string[]>>): { rows: ListingRow[]; errors: string[] } {
   const rows: ListingRow[] = [];
   const errors: string[] = [];
   const seenLinks = new Map<string, number>();
@@ -55,6 +73,17 @@ export function parseListingRows(fields: {
     if (!Number.isFinite(bedrooms) || bedrooms < 0 || bedrooms > 20) {
       errors.push(`Row ${n}: choose the number of bedrooms.`);
     }
+    const prices: ListingPrices = {};
+    for (const { key, label, max } of PRICE_FIELDS) {
+      const raw = (fields[key]?.[i] ?? "").trim();
+      if (!raw) continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || (max !== undefined && value > max)) {
+        errors.push(`Row ${n}: the ${label} must be a number${max !== undefined ? ` from 0 to ${max}` : " of 0 or more"}.`);
+      } else {
+        prices[key] = value;
+      }
+    }
 
     if (link) {
       const earlier = seenLinks.get(link);
@@ -68,7 +97,7 @@ export function parseListingRows(fields: {
       else seenUnits.set(key, n);
     }
 
-    rows.push({ row: n, building, unitNumber, bedrooms, link });
+    rows.push({ row: n, building, unitNumber, bedrooms, link, prices });
   }
 
   if (rows.length === 0 && errors.length === 0) errors.push("Add at least one listing.");

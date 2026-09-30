@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { dubaiToday, nightsBetween } from "@/lib/calendar";
+import { quoteStay } from "@/lib/pricing";
 import { flushEmailsSoon } from "@/lib/notify/flush";
 import { earningsToBookingAmounts, parseAirbnbEarnings } from "@/lib/airbnb/earnings-csv";
 
@@ -125,6 +126,9 @@ const bookingSchema = z
     guestNationality: z.string().max(60).optional(),
     guestPassport: z.string().max(30).optional(),
     nightlyRate: money,
+    // Friday and Saturday nights; blank or 0 means the nightly rate.
+    weekendRate: money.default(0),
+    discountPct: z.coerce.number().min(0).max(99, "A discount must be under 100%").default(0),
     cleaningFee: money.default(0),
     extraFees: money.default(0),
     tourismDirham: money.default(0),
@@ -205,8 +209,13 @@ export async function createBooking(
     guestId = guest.id;
   }
 
-  const nights = nightsBetween(input.checkIn, input.checkOut);
-  const accommodation = round2(input.nightlyRate * nights);
+  // The same quote the form shows: weekend nights and the agreed discount.
+  const { accommodation } = quoteStay(
+    input.checkIn,
+    input.checkOut,
+    { nightly: input.nightlyRate, weekend: input.weekendRate },
+    input.discountPct
+  );
   const gross = round2(accommodation + input.cleaningFee + input.extraFees + input.tourismDirham);
 
   const { data: booking, error } = await supabase

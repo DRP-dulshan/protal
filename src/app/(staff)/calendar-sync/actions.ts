@@ -16,6 +16,17 @@ export interface ListingResult {
   message: string;
 }
 
+/** The prices filled in on a row, as unit columns; blanks leave a unit's own. */
+function priceColumns({ prices }: ListingRow) {
+  return {
+    ...(prices.nightly !== undefined ? { base_nightly_rate_aed: prices.nightly } : {}),
+    ...(prices.weekend !== undefined ? { weekend_rate_aed: prices.weekend } : {}),
+    ...(prices.cleaning !== undefined ? { cleaning_fee_aed: prices.cleaning } : {}),
+    ...(prices.weeklyDiscount !== undefined ? { weekly_discount_pct: prices.weeklyDiscount } : {}),
+    ...(prices.monthlyDiscount !== undefined ? { monthly_discount_pct: prices.monthlyDiscount } : {}),
+  };
+}
+
 export type AddListingsState = { errors?: string[]; results?: ListingResult[] };
 
 /** Airbnb feeds are fetched a few at a time so a long list stays quick. */
@@ -42,6 +53,11 @@ export async function addAirbnbListings(
     building: all("building"),
     unitNumber: all("unitNumber"),
     bedrooms: all("bedrooms"),
+    nightly: all("nightly"),
+    weekend: all("weekend"),
+    cleaning: all("cleaning"),
+    weeklyDiscount: all("weeklyDiscount"),
+    monthlyDiscount: all("monthlyDiscount"),
     link: all("link"),
   });
   if (errors.length) return { errors };
@@ -103,7 +119,7 @@ export async function addAirbnbListings(
       }
       const { data, error } = await supabase
         .from("units")
-        .update({ airbnb_ical_url: row.link })
+        .update({ airbnb_ical_url: row.link, ...priceColumns(row) })
         .eq("id", existing.id)
         .select("id");
       if (error || !data?.length) {
@@ -122,6 +138,7 @@ export async function addAirbnbListings(
         furnishing: "fully_furnished",
         operating_mode: "short_term",
         airbnb_ical_url: row.link,
+        ...priceColumns(row),
       })
       .select("id")
       .single();
