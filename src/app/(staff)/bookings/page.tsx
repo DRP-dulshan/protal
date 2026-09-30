@@ -114,8 +114,8 @@ export default async function BookingsPage({
     "Check-out": b.check_out,
     Nights: b.nights ?? "",
     Status: BOOKING_STATUS[b.status],
-    "Total (AED)": b.gross_total_aed,
-    "Expected payout (AED)": b.payout_expected_aed ?? "",
+    "Payout (AED)": b.payout_expected_aed ?? b.gross_total_aed,
+    "Guest paid (AED)": b.gross_total_aed,
   }));
 
   return (
@@ -244,7 +244,7 @@ export default async function BookingsPage({
                 <TableHead>Stay</TableHead>
                 <TableHead className="hidden lg:table-cell">Channel</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Total</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Payout</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -280,7 +280,8 @@ export default async function BookingsPage({
                     {Number(b.gross_total_aed) === 0 && b.status !== "cancelled" && b.status !== "no_show" ? (
                       <span className="text-xs text-[var(--warning)]">No price yet</span>
                     ) : (
-                      <Money amount={b.gross_total_aed} />
+                      // What D|R|P receives: Airbnb's "Amount" for imported stays.
+                      <Money amount={b.payout_expected_aed ?? b.gross_total_aed} />
                     )}
                   </TableCell>
                 </TableRow>

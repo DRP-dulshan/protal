@@ -157,7 +157,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <Field label="Tourism Dirham"><Money amount={b.tourism_dirham_aed} /></Field>
               <Field label="Channel commission"><Money amount={b.channel_commission_aed} /></Field>
               <Field label="Guest pays"><Money amount={b.gross_total_aed} className="font-semibold" /></Field>
-              <Field label="Expected payout"><Money amount={b.payout_expected_aed} /></Field>
+              <Field label={b.channel === "airbnb" ? 'Payout (Airbnb "Amount")' : "Expected payout"}>
+                <Money amount={b.payout_expected_aed} />
+              </Field>
               <Field label="Damage deposit"><Money amount={b.damage_deposit_aed} /></Field>
             </FieldGrid>
           </CardContent>
