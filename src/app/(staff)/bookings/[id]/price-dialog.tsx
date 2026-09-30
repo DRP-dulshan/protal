@@ -35,21 +35,30 @@ export function PriceDialog({
   bookingId,
   isAirbnb,
   needsGuest,
+  priced,
+  defaultOpen = false,
   current,
 }: {
   bookingId: string;
   isAirbnb: boolean;
   /** No guest on file yet (a stay imported from the Airbnb calendar). */
   needsGuest: boolean;
+  /** Has a guest total or a payout already. */
+  priced: boolean;
+  /** Open on arrival (the "No price yet" link on the bookings list). */
+  defaultOpen?: boolean;
   current: {
     accommodation: number;
     cleaning: number;
     extra: number;
     tourism: number;
     commission: number;
+    payout: number;
   };
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(defaultOpen);
+  // Airbnb's reservation panel shows only the total, so that is the quick way in.
+  const [payoutOnly, setPayoutOnly] = React.useState(isAirbnb && current.accommodation === 0);
   const submit = React.useMemo(() => updateBookingPrice.bind(null, bookingId), [bookingId]);
   const [state, action] = useActionState<ActionState, FormData>(submit, {});
   const [v, setV] = React.useState({
@@ -67,7 +76,6 @@ export function PriceDialog({
     }
   }, [state]);
 
-  const priced = current.accommodation > 0;
   const gross = num(v.accommodation) + num(v.cleaning) + num(v.extra) + num(v.tourism);
   const payout = gross - num(v.commission) - num(v.tourism);
   const field = (key: keyof typeof v) => ({
@@ -88,12 +96,57 @@ export function PriceDialog({
           <DialogHeader>
             <DialogTitle>{priced ? "Edit price" : "Enter price"}</DialogTitle>
             <DialogDescription>
-              {isAirbnb
-                ? "From the reservation in Airbnb: accommodation is the gross earnings minus the cleaning fee, commission is Airbnb's host service fee, and Tourism Dirham is the occupancy tax. Owners never see these amounts."
-                : "Owners never see these amounts."}
+              {!isAirbnb
+                ? "Owners never see these amounts."
+                : payoutOnly
+                  ? "The total Airbnb shows on the reservation (what D|R|P receives). Importing Airbnb's earnings CSV later fills in the full breakdown. Owners never see these amounts."
+                  : "From the reservation in Airbnb: accommodation is the gross earnings minus the cleaning fee, commission is Airbnb's host service fee, and Tourism Dirham is the occupancy tax. Owners never see these amounts."}
             </DialogDescription>
           </DialogHeader>
 
+          {isAirbnb && (
+            <div className="mt-4 inline-flex rounded-lg border border-[var(--border)] p-0.5 text-sm" role="group">
+              {[
+                { value: true, label: "Airbnb total only" },
+                { value: false, label: "Full breakdown" },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  aria-pressed={payoutOnly === o.value}
+                  onClick={() => setPayoutOnly(o.value)}
+                  className={
+                    payoutOnly === o.value
+                      ? "rounded-md bg-[var(--primary)] px-3 py-1 text-[var(--primary-foreground)]"
+                      : "rounded-md px-3 py-1 text-[var(--muted-foreground)]"
+                  }
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {payoutOnly ? (
+            <div className="my-4 grid gap-4 sm:grid-cols-2">
+              <FormError message={state.error} />
+              <input type="hidden" name="mode" value="payout" />
+              {needsGuest && (
+                <TextField name="guestName" label="Guest name" wide placeholder="As on the reservation" />
+              )}
+              <TextField
+                name="payout"
+                label="Payout (AED)"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                wide
+                placeholder="e.g. 3682.06"
+                defaultValue={current.payout ? String(current.payout) : ""}
+              />
+            </div>
+          ) : (
           <div className="my-4 grid gap-4 sm:grid-cols-2">
             <FormError message={state.error} />
             {needsGuest && (
@@ -122,6 +175,7 @@ export function PriceDialog({
               </div>
             </div>
           </div>
+          )}
 
           <DialogFooter>
             <Submit />

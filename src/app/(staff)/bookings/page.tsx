@@ -37,6 +37,8 @@ type View = keyof typeof VIEWS;
 const LIVE = ["inquiry", "tentative", "confirmed", "checked_in"] as const;
 /** Stays that happen or happened, i.e. that should have a price. */
 const PRICED = ["tentative", "confirmed", "checked_in", "checked_out"] as const;
+/** No payout either: an Airbnb stay can be priced with its payout alone. */
+const NO_PAYOUT = "payout_expected_aed.is.null,payout_expected_aed.eq.0";
 
 export default async function BookingsPage({
   searchParams,
@@ -60,7 +62,7 @@ export default async function BookingsPage({
       .lt("check_out", today)
       .order("check_in", { ascending: false });
   } else if (view === "needs_price") {
-    query = query.in("status", [...PRICED]).eq("gross_total_aed", 0).order("check_in");
+    query = query.in("status", [...PRICED]).eq("gross_total_aed", 0).or(NO_PAYOUT).order("check_in");
   } else if (view === "cancelled") {
     query = query.in("status", ["cancelled", "no_show"]).order("check_in", { ascending: false });
   } else {
@@ -86,7 +88,8 @@ export default async function BookingsPage({
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .in("status", [...PRICED])
-      .eq("gross_total_aed", 0),
+      .eq("gross_total_aed", 0)
+      .or(NO_PAYOUT),
     // Today's movements, whatever the filter.
     supabase
       .from("bookings")
@@ -277,8 +280,16 @@ export default async function BookingsPage({
                     <BookingStatusBadge status={b.status} />
                   </TableCell>
                   <TableCell className="hidden text-right sm:table-cell">
-                    {Number(b.gross_total_aed) === 0 && b.status !== "cancelled" && b.status !== "no_show" ? (
-                      <span className="text-xs text-[var(--warning)]">No price yet</span>
+                    {Number(b.gross_total_aed) === 0 &&
+                    !Number(b.payout_expected_aed) &&
+                    b.status !== "cancelled" &&
+                    b.status !== "no_show" ? (
+                      <Link
+                        href={`/bookings/${b.id}?price=1`}
+                        className="relative z-10 text-xs text-[var(--warning)] underline underline-offset-2"
+                      >
+                        No price yet
+                      </Link>
                     ) : (
                       // What D|R|P receives: Airbnb's "Amount" for imported stays.
                       <Money amount={b.payout_expected_aed ?? b.gross_total_aed} />

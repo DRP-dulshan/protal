@@ -21,8 +21,11 @@ export default async function ImportAirbnbEarningsPage() {
           <p className="font-medium">Getting the file from Airbnb</p>
           <ol className="list-decimal space-y-1 pl-5 text-[var(--muted-foreground)]">
             <li>In Airbnb, open Menu, then Earnings.</li>
-            <li>Choose Transaction history (upcoming or paid), set the dates, and click Export CSV.</li>
-            <li>Upload that file here. Importing the same file again is safe.</li>
+            <li>
+              Choose Transaction history. Export CSV from <strong>both</strong> the Paid and the
+              Upcoming tab, with dates covering every current stay: a stay is on only one of them.
+            </li>
+            <li>Upload both files here, one after the other. Importing the same file again is safe.</li>
           </ol>
           <p className="text-[var(--muted-foreground)]">
             Each reservation&apos;s payout, Airbnb service fee, cleaning fee and Tourism Dirham

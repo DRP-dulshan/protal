@@ -15,8 +15,15 @@ import { PriceDialog } from "./price-dialog";
 
 export const metadata = { title: "Booking" };
 
-export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BookingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ price?: string }>;
+}) {
   const { id } = await params;
+  const { price } = await searchParams;
   if (!z.string().uuid().safeParse(id).success) notFound();
 
   const supabase = await createClient();
@@ -138,12 +145,15 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 bookingId={b.id}
                 isAirbnb={b.channel === "airbnb"}
                 needsGuest={!b.guests}
+                priced={Number(b.gross_total_aed) > 0 || Number(b.payout_expected_aed) > 0}
+                defaultOpen={price === "1"}
                 current={{
                   accommodation: Number(b.accommodation_aed),
                   cleaning: Number(b.cleaning_fee_aed),
                   extra: Number(b.extra_fees_aed),
                   tourism: Number(b.tourism_dirham_aed),
                   commission: Number(b.channel_commission_aed),
+                  payout: Number(b.payout_expected_aed),
                 }}
               />
             )}
@@ -156,7 +166,14 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <Field label="Other fees"><Money amount={b.extra_fees_aed} /></Field>
               <Field label="Tourism Dirham"><Money amount={b.tourism_dirham_aed} /></Field>
               <Field label="Channel commission"><Money amount={b.channel_commission_aed} /></Field>
-              <Field label="Guest pays"><Money amount={b.gross_total_aed} className="font-semibold" /></Field>
+              <Field label="Guest pays">
+                {/* Priced with the Airbnb payout alone: the guest total is not known yet. */}
+                {Number(b.gross_total_aed) > 0 || !Number(b.payout_expected_aed) ? (
+                  <Money amount={b.gross_total_aed} className="font-semibold" />
+                ) : (
+                  "—"
+                )}
+              </Field>
               <Field label={b.channel === "airbnb" ? 'Payout (Airbnb "Amount")' : "Expected payout"}>
                 <Money amount={b.payout_expected_aed} />
               </Field>

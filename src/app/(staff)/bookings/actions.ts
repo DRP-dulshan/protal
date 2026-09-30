@@ -561,7 +561,15 @@ const priceSchema = z.object({
   guestName: z.string().trim().max(160).optional(),
 });
 
-/** Enters or corrects a booking's price. The payout is always derived. */
+const payoutOnlySchema = z.object({
+  payout: money.refine((n) => n > 0, "Enter the payout shown on the Airbnb reservation."),
+  guestName: z.string().trim().max(160).optional(),
+});
+
+/**
+ * Enters or corrects a booking's price. The payout is derived from the
+ * breakdown, except in "Airbnb total only" mode where it is all there is.
+ */
 export async function updateBookingPrice(
   bookingId: string,
   _prev: ActionState,
@@ -573,7 +581,12 @@ export async function updateBookingPrice(
   }
   if (!z.string().uuid().safeParse(bookingId).success) return { error: "Booking not found." };
 
-  const parsed = priceSchema.safeParse(Object.fromEntries(formData));
+  // "Airbnb total only": the reservation panel shows just the payout. The
+  // breakdown stays empty until the earnings CSV fills it in.
+  const payoutOnly = formData.get("mode") === "payout";
+  const parsed = payoutOnly
+    ? payoutOnlySchema.safeParse(Object.fromEntries(formData))
+    : priceSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Check the amounts and try again." };
   }
@@ -598,12 +611,13 @@ export async function updateBookingPrice(
     guestId = guest.id;
   }
 
-  const nights = nightsBetween(booking.check_in, booking.check_out);
-  const gross = round2(input.accommodation + input.cleaningFee + input.extraFees + input.tourismDirham);
-  const { data: changed, error } = await supabase
-    .from("bookings")
-    .update({
-      guest_id: guestId,
+  let amounts;
+  if ("payout" in input) {
+    amounts = { payout_expected_aed: round2(input.payout) };
+  } else {
+    const nights = nightsBetween(booking.check_in, booking.check_out);
+    const gross = round2(input.accommodation + input.cleaningFee + input.extraFees + input.tourismDirham);
+    amounts = {
       accommodation_aed: input.accommodation,
       nightly_rate_aed: nights > 0 ? round2(input.accommodation / nights) : null,
       cleaning_fee_aed: input.cleaningFee,
@@ -612,7 +626,11 @@ export async function updateBookingPrice(
       channel_commission_aed: input.channelCommission,
       gross_total_aed: gross,
       payout_expected_aed: round2(gross - input.channelCommission - input.tourismDirham),
-    })
+    };
+  }
+  const { data: changed, error } = await supabase
+    .from("bookings")
+    .update({ guest_id: guestId, ...amounts })
     .eq("id", bookingId)
     .select("id");
   if (error) return { error: explain(error) };
@@ -628,6 +646,9 @@ export type ImportState = ActionState & {
   notFound?: string[];
   otherCurrency?: string[];
   skipped?: Record<string, number>;
+  /** Airbnb stays still without a price whose code was not in the file. */
+  stillMissing?: { id: string; code: string; unit: string; checkIn: string }[];
+  stillMissingTotal?: number;
 };
 
 /**
@@ -700,6 +721,21 @@ export async function importAirbnbEarnings(
     if (changed?.length) updated++;
   }
 
+  // Stays the file did not cover: usually the other Airbnb tab (Paid or
+  // Upcoming) or a date range that ends too early.
+  const inFile = new Set(reservations.map((r) => r.code));
+  const { data: unpriced } = await supabase
+    .from("bookings")
+    .select("id, external_booking_id, check_in, units(unit_number, properties(name))")
+    .eq("channel", "airbnb")
+    .in("status", ["tentative", "confirmed", "checked_in", "checked_out"])
+    .eq("gross_total_aed", 0)
+    .or("payout_expected_aed.is.null,payout_expected_aed.eq.0")
+    .order("check_in");
+  const missing = (unpriced ?? []).filter(
+    (b) => !b.external_booking_id || !inFile.has(b.external_booking_id.toUpperCase())
+  );
+
   revalidatePath("/bookings");
   return {
     success: `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
@@ -707,5 +743,12 @@ export async function importAirbnbEarnings(
     notFound,
     otherCurrency,
     skipped,
+    stillMissing: missing.slice(0, 30).map((b) => ({
+      id: b.id,
+      code: b.external_booking_id ?? "no code",
+      unit: `${b.units?.properties?.name ?? ""} ${b.units?.unit_number ?? ""}`.trim(),
+      checkIn: b.check_in,
+    })),
+    stillMissingTotal: missing.length,
   };
 }
