@@ -165,7 +165,25 @@ export const MAINTENANCE_CATEGORY: LabelMap<Enums<"maintenance_category">> = {
   lift: "Lift",
   handyman: "Handyman",
   structural: "Structural",
+  noise: "Noise",
+  neighbours: "Neighbours",
+  security: "Security",
+  internet_tv: "Internet / TV",
+  service: "Service",
   other: "Other",
+};
+
+/** Repairs and complaints share one queue; `kind` tells them apart. */
+export const TICKET_KIND = { repair: "Repair", complaint: "Complaint" } as const;
+export type TicketKind = keyof typeof TICKET_KIND;
+
+/** The categories offered for each kind of ticket, most common first. */
+export const TICKET_CATEGORIES: Record<TicketKind, Enums<"maintenance_category">[]> = {
+  repair: [
+    "air_conditioning", "plumbing", "electrical", "appliance", "carpentry", "painting",
+    "pest_control", "lift", "pool", "landscaping", "fire_safety", "structural", "handyman", "other",
+  ],
+  complaint: ["noise", "cleaning", "neighbours", "security", "internet_tv", "service", "other"],
 };
 
 export const INVOICE_STATUS: LabelMap<Enums<"invoice_status">> = {

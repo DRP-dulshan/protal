@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Bell, CalendarPlus, CalendarRange, CalendarX2 } from "lucide-react";
+import { Bell, CalendarPlus, CalendarRange, CalendarX2, ClipboardCheck, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/domain/shared";
@@ -22,6 +22,8 @@ const ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   booking_new: CalendarPlus,
   booking_changed: CalendarRange,
   booking_cancelled: CalendarX2,
+  ticket_new: Wrench,
+  ticket_status: ClipboardCheck,
 };
 
 const when = (iso: string) =>
@@ -49,7 +51,7 @@ export function NotificationList({ rows }: { rows: NotificationRow[] }) {
     return (
       <EmptyState
         title="No notifications yet"
-        description="New, changed and cancelled bookings appear here as they happen."
+        description="Bookings, repairs and complaints on your properties appear here as they happen."
         icon={<Bell className="size-8" />}
       />
     );

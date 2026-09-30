@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
+import { TICKET_CATEGORIES } from "@/lib/labels";
+import type { Enums } from "@/lib/db/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 
@@ -62,4 +65,50 @@ export async function decideMaintenance(
         ? "Approved. Your property manager has been notified and work can begin."
         : "Declined. Your property manager has been notified.",
   };
+}
+
+const reportSchema = z
+  .object({
+    unitId: z.string().uuid("Choose the property"),
+    kind: z.enum(["repair", "complaint"]),
+    category: z.string(),
+    priority: z.enum(["low", "medium", "high", "emergency"]),
+    title: z.string().trim().min(3, "Give it a short title").max(150),
+    description: z.string().trim().max(4000).optional(),
+    accessNotes: z.string().trim().max(1000).optional(),
+  })
+  .refine((t) => (TICKET_CATEGORIES[t.kind] as string[]).includes(t.category), {
+    message: "Choose a category",
+    path: ["category"],
+  });
+
+/**
+ * An owner reports a repair or complaint on one of their properties. It goes
+ * through raise_owner_ticket, which checks ownership and fixes who raised it
+ * and its starting status; D|R|P is notified by the database.
+ */
+export async function reportIssue(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireRole(["owner"]);
+  const parsed = reportSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+  const t = parsed.data;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("raise_owner_ticket", {
+    p_unit_id: t.unitId,
+    p_kind: t.kind,
+    p_category: t.category as Enums<"maintenance_category">,
+    p_priority: t.priority,
+    p_title: t.title,
+    p_description: t.description || undefined,
+    p_access_notes: t.accessNotes || undefined,
+  });
+  if (error || !data) {
+    return {
+      error: error?.code === "42501" ? "You can only report issues for your own properties." : (error?.message ?? "Could not send the report."),
+    };
+  }
+
+  revalidatePath("/portal/owner/maintenance");
+  redirect(`/portal/owner/maintenance/${data}?sent=1`);
 }

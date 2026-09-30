@@ -2085,6 +2085,7 @@ export type Database = {
           ledger_entry_id: string | null;
           created_at: string;
           updated_at: string;
+          kind: string;
         };
         Insert: {
           id?: string;
@@ -2122,6 +2123,7 @@ export type Database = {
           ledger_entry_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          kind?: string;
         };
         Update: {
           id?: string;
@@ -2159,6 +2161,7 @@ export type Database = {
           ledger_entry_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          kind?: string;
         };
         Relationships: [
           {
@@ -2573,6 +2576,7 @@ export type Database = {
           unit_id: string | null;
           created_at: string;
           read_at: string | null;
+          ticket_id: string | null;
         };
         Insert: {
           id?: string;
@@ -2585,6 +2589,7 @@ export type Database = {
           unit_id?: string | null;
           created_at?: string;
           read_at?: string | null;
+          ticket_id?: string | null;
         };
         Update: {
           id?: string;
@@ -2597,6 +2602,7 @@ export type Database = {
           unit_id?: string | null;
           created_at?: string;
           read_at?: string | null;
+          ticket_id?: string | null;
         };
         Relationships: [
           {
@@ -2611,6 +2617,13 @@ export type Database = {
             columns: ["recipient_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_ticket_id_fkey";
+            columns: ["ticket_id"];
+            isOneToOne: false;
+            referencedRelation: "maintenance_requests";
             referencedColumns: ["id"];
           },
           {
@@ -4626,6 +4639,10 @@ export type Database = {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      raise_owner_ticket: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
     };
     Enums: {
       app_role: "super_admin" | "property_manager" | "agent" | "owner" | "tenant" | "guest" | "maintenance" | "finance" | "marketing";
@@ -4652,7 +4669,7 @@ export type Database = {
       lead_stage: "new" | "contacted" | "qualified" | "viewing_scheduled" | "application" | "negotiation" | "won" | "lost";
       lease_status: "draft" | "pending_signature" | "active" | "expiring" | "renewed" | "terminated" | "cancelled" | "expired";
       ledger_direction: "income" | "expense";
-      maintenance_category: "air_conditioning" | "plumbing" | "electrical" | "appliance" | "carpentry" | "painting" | "pest_control" | "cleaning" | "pool" | "landscaping" | "fire_safety" | "lift" | "handyman" | "structural" | "other";
+      maintenance_category: "air_conditioning" | "plumbing" | "electrical" | "appliance" | "carpentry" | "painting" | "pest_control" | "cleaning" | "pool" | "landscaping" | "fire_safety" | "lift" | "handyman" | "structural" | "other" | "noise" | "neighbours" | "security" | "internet_tv" | "service";
       maintenance_priority: "low" | "medium" | "high" | "emergency";
       maintenance_status: "submitted" | "acknowledged" | "awaiting_quote" | "awaiting_owner_approval" | "approved" | "scheduled" | "in_progress" | "on_hold" | "completed" | "closed" | "rejected" | "cancelled";
       message_channel: "whatsapp" | "email" | "sms" | "in_app";
