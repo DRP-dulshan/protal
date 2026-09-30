@@ -25,6 +25,8 @@ import {
 import { formatDate, rollingWindow } from "@/lib/dates";
 import { COMPLIANCE_KIND } from "@/lib/labels";
 import { formatAED } from "@/lib/money";
+import { addDays, dubaiToday } from "@/lib/calendar";
+import { summariseStays } from "@/lib/stays-summary";
 
 export const metadata = { title: "Dashboard" };
 
@@ -33,13 +35,15 @@ export default async function DashboardPage() {
   // Rolling window, not calendar month: on the 1st a month-to-date figure
   // is empty and tells the reader nothing.
   const { start, end } = rollingWindow(30);
+  const today = dubaiToday();
+  const stayFrom = addDays(today, -29);
 
   // Every query below runs as the signed-in user, so a property manager sees
   // only their assigned buildings without any extra filtering here.
   // The profile check travels in the same batch as the data: RLS already
   // guards every query, so waiting for the profile first would only add a
   // full round trip to the database region.
-  const [profile, unitsResult, complianceResult, ledgerResult, maintenanceResult] =
+  const [profile, unitsResult, complianceResult, ledgerResult, maintenanceResult, staysResult] =
     await Promise.all([
       requireProfile(),
       supabase
@@ -56,7 +60,7 @@ export default async function DashboardPage() {
 
       supabase
         .from("ledger_entries")
-        .select("direction, amount_aed, vat_amount_aed")
+        .select("direction, amount_aed, vat_amount_aed, booking_id")
         .gte("entry_date", start)
         .lte("entry_date", end),
 
@@ -66,6 +70,15 @@ export default async function DashboardPage() {
         .not("status", "in", "(closed,cancelled,rejected)")
         .order("reported_at", { ascending: false })
         .limit(5),
+
+      // Holiday-home stays touching the last 30 nights: occupancy and income
+      // come from the bookings themselves, not from anything posted by hand.
+      supabase
+        .from("bookings")
+        .select("unit_id, check_in, check_out, payout_expected_aed, gross_total_aed")
+        .in("status", ["confirmed", "checked_in", "checked_out"])
+        .lte("check_in", today)
+        .gt("check_out", stayFrom),
     ]);
 
   const units = unitsResult.data ?? [];
@@ -75,13 +88,31 @@ export default async function DashboardPage() {
 
   const totalUnits = units.length;
   const occupied = units.filter((u) => u.status === "occupied_long_term").length;
-  const listedShort = units.filter((u) => u.status === "listed_short_term").length;
-  const vacant = units.filter((u) => u.status === "vacant").length;
-  const occupancyRate = totalUnits ? Math.round(((occupied + listedShort) / totalUnits) * 100) : 0;
+  // A holiday-home unit is short-term by how it operates; its status only
+  // changes with leases, so it would otherwise read "vacant" forever.
+  const listedShort = units.filter(
+    (u) =>
+      u.status !== "occupied_long_term" &&
+      (u.status === "listed_short_term" || u.operating_mode === "short_term" || u.operating_mode === "both")
+  ).length;
+  const vacant = totalUnits - occupied - listedShort;
 
-  const income = ledger
-    .filter((e) => e.direction === "income")
+  const leasedIds = new Set(units.filter((u) => u.status === "occupied_long_term").map((u) => u.id));
+  const stays = summariseStays(
+    (staysResult.data ?? []).filter((b) => !leasedIds.has(b.unit_id)),
+    stayFrom,
+    today
+  );
+  // Leased units are occupied every night; holiday homes by the nights booked.
+  const occupancyRate = totalUnits
+    ? Math.round(((occupied * 30 + stays.nights) / (totalUnits * 30)) * 100)
+    : 0;
+
+  // Ledger income tied to a booking is already in the booking payouts.
+  const otherIncome = ledger
+    .filter((e) => e.direction === "income" && !e.booking_id)
     .reduce((sum, e) => sum + Number(e.amount_aed ?? 0), 0);
+  const income = stays.payout + otherIncome;
   const expenses = ledger
     .filter((e) => e.direction === "expense")
     .reduce((sum, e) => sum + Number(e.amount_aed ?? 0) + Number(e.vat_amount_aed ?? 0), 0);
@@ -118,7 +149,7 @@ export default async function DashboardPage() {
         <StatCard
           label="Occupancy"
           value={`${occupancyRate}%`}
-          sublabel="Long-term and short-term combined"
+          sublabel={`Last 30 nights · ${stays.nights} booked nights`}
           icon={<TrendingUp className="size-5" />}
           tone={occupancyRate >= 85 ? "success" : occupancyRate >= 70 ? "warning" : "danger"}
         />
@@ -287,9 +318,21 @@ export default async function DashboardPage() {
           <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                Collected income
+                Income
               </p>
               <Money amount={income} className="mt-1 block text-lg font-semibold" />
+              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                Bookings {formatAED(stays.payout, { decimals: false })} · Other{" "}
+                {formatAED(otherIncome, { decimals: false })}
+              </p>
+              {stays.unpriced > 0 && (
+                <Link
+                  href="/bookings?view=needs_price"
+                  className="mt-0.5 block text-xs text-[var(--warning)] underline underline-offset-2"
+                >
+                  {stays.unpriced} {stays.unpriced === 1 ? "stay has" : "stays have"} no price yet
+                </Link>
+              )}
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
@@ -308,9 +351,9 @@ export default async function DashboardPage() {
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                Ledger entries
+                Nights booked
               </p>
-              <p className="tabular mt-1 text-lg font-semibold">{ledger.length}</p>
+              <p className="tabular mt-1 text-lg font-semibold">{stays.nights}</p>
             </div>
           </CardContent>
         </Card>
