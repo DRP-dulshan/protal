@@ -20,3 +20,6 @@ supabase/local/pg.log
 
 .vercel
 .env*
+
+# Owner lists with personal contact details - never commit
+*owners*.csv
