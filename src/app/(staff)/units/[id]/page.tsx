@@ -45,7 +45,7 @@ import { BlockDatesDialog, BlockNoteDialog, RemoveBlockButton } from "./block-da
 import { ChannelSync } from "./channel-sync";
 import { env } from "@/lib/env";
 import { BookingCalendar } from "@/components/domain/booking-calendar";
-import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
+import { dubaiToday, monthGrid, parseMonth, rangesOverlap, uncoveredRanges } from "@/lib/calendar";
 
 /** Shared by the page and its metadata, so the overview row is fetched once. */
 const getOverview = cache(async (id: string) => {
@@ -185,6 +185,30 @@ export default async function UnitDetailPage({
   // The sync's own placeholder ("Not available on Airbnb") is not a note.
   const noteOf = (note: string | null) => (note && !/^Not available on /.test(note) ? note : null);
   const upcomingHolds = holds.filter((h) => h.end_date > today);
+
+  // D|R|P blocks Airbnb for the nights its direct guests stay. Each Airbnb
+  // block lists the stays recorded inside it and offers the nights still
+  // without one as a new booking.
+  const airbnbHolds = upcomingHolds.filter((h) => h.reason === "channel_sync");
+  const { data: blockStays } = airbnbHolds.length
+    ? await supabase
+        .from("bookings")
+        .select("id, booking_number, check_in, check_out, guests(full_name)")
+        .eq("unit_id", id)
+        .neq("channel", "airbnb")
+        .in("status", ["tentative", "confirmed", "checked_in", "checked_out"])
+        .lt("check_in", airbnbHolds.reduce((m, h) => (h.end_date > m ? h.end_date : m), ""))
+        .gt("check_out", airbnbHolds.reduce((m, h) => (h.start_date < m ? h.start_date : m), "9999-12-31"))
+        .order("check_in")
+    : { data: [] };
+  const staysIn = (h: { start_date: string; end_date: string }) =>
+    (blockStays ?? []).filter((b) => rangesOverlap(b.check_in, b.check_out, h.start_date, h.end_date));
+  const freeIn = (h: { start_date: string; end_date: string }) =>
+    uncoveredRanges(
+      h.start_date,
+      h.end_date,
+      staysIn(h).map((b) => ({ start: b.check_in, end: b.check_out }))
+    );
 
   const activeLease = leases.find(
     (l) => l.status === "active" || l.status === "expiring"
@@ -573,7 +597,7 @@ export default async function UnitDetailPage({
                     {upcomingHolds.map((h) => (
                       <li
                         key={h.id}
-                        className="flex items-center justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0"
+                        className="flex items-start justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0"
                       >
                         <div className="min-w-0 text-sm">
                           <span className="font-medium">
@@ -591,6 +615,34 @@ export default async function UnitDetailPage({
                           {noteOf(h.note) && (
                             <p className="whitespace-pre-line text-xs text-[var(--muted-foreground)]">{noteOf(h.note)}</p>
                           )}
+                          {h.reason === "channel_sync" &&
+                            staysIn(h).map((b) => (
+                              <Link
+                                key={b.id}
+                                href={`/bookings/${b.id}`}
+                                className="block text-xs text-[var(--success)] hover:underline"
+                              >
+                                Booked: {b.booking_number}
+                                {b.guests?.full_name ? ` · ${b.guests.full_name}` : ""} ·{" "}
+                                <span className="tabular">
+                                  {formatDate(b.check_in)} → {formatDate(b.check_out)}
+                                </span>
+                              </Link>
+                            ))}
+                          {h.reason === "channel_sync" &&
+                            can(profile.role, "bookings.manage") &&
+                            freeIn(h).map((gap) => (
+                              <Button key={gap.start} asChild size="sm" variant="outline" className="mt-1.5 mr-2">
+                                <Link
+                                  href={`/bookings/new?unit=${unit.id}&block=${h.id}&checkIn=${gap.start}&checkOut=${gap.end}`}
+                                >
+                                  <CalendarPlus className="size-4" />
+                                  {gap.start === h.start_date && gap.end === h.end_date
+                                    ? "Add as booking"
+                                    : `Add booking ${formatDate(gap.start)} → ${formatDate(gap.end)}`}
+                                </Link>
+                              </Button>
+                            ))}
                         </div>
                         {can(profile.role, "bookings.manage") && (
                           <div className="flex shrink-0 items-center">

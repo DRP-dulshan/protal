@@ -40,17 +40,26 @@ export function BookingForm({
   units,
   guests,
   defaultUnitId,
+  defaultCheckIn,
+  defaultCheckOut,
+  defaultNotes,
+  cancelHref = "/bookings",
 }: {
   units: BookableUnit[];
   guests: { id: string; full_name: string }[];
   defaultUnitId?: string;
+  defaultCheckIn?: string;
+  defaultCheckOut?: string;
+  /** Internal notes to start from, such as the note on an Airbnb block. */
+  defaultNotes?: string;
+  cancelHref?: string;
 }) {
   const [state, action] = useActionState<ActionState, FormData>(createBooking, {});
   const [unitId, setUnitId] = React.useState(defaultUnitId ?? "");
   const [channel, setChannel] = React.useState("direct");
   const [guestId, setGuestId] = React.useState("");
-  const [checkIn, setCheckIn] = React.useState("");
-  const [checkOut, setCheckOut] = React.useState("");
+  const [checkIn, setCheckIn] = React.useState(defaultCheckIn ?? "");
+  const [checkOut, setCheckOut] = React.useState(defaultCheckOut ?? "");
   const initial = units.find((u) => u.id === defaultUnitId);
   const [rate, setRate] = React.useState(initial?.nightlyRate ? String(initial.nightlyRate) : "");
   const [weekendRate, setWeekendRate] = React.useState(initial?.weekendRate ? String(initial.weekendRate) : "");
@@ -301,10 +310,10 @@ export function BookingForm({
 
       <FormSection title="Notes" columns={1}>
         <TextAreaField name="guestMessage" label="Message from the guest" rows={2} />
-        <TextAreaField name="internalNotes" label="Internal notes" rows={2} />
+        <TextAreaField name="internalNotes" label="Internal notes" rows={2} defaultValue={defaultNotes} />
       </FormSection>
 
-      <SubmitBar label="Create booking" cancelHref="/bookings" />
+      <SubmitBar label="Create booking" cancelHref={cancelHref} />
     </form>
   );
 }

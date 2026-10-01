@@ -225,7 +225,11 @@ const bookingSchema = z
     path: ["guestName"],
   });
 
-/** Owner stays, maintenance and manual holds that fall inside these dates. */
+/**
+ * Owner stays, maintenance and manual holds that fall inside these dates.
+ * Dates blocked on Airbnb are not among them: D|R|P blocks Airbnb for the
+ * nights its direct guests stay, so a direct booking is expected there.
+ */
 async function blockingHolds(
   supabase: Awaited<ReturnType<typeof createClient>>,
   unitId: string,
@@ -238,7 +242,7 @@ async function blockingHolds(
     .eq("unit_id", unitId)
     .lt("start_date", end)
     .gt("end_date", start)
-    .neq("reason", "booking");
+    .not("reason", "in", "(booking,channel_sync)");
   return data ?? [];
 }
 
