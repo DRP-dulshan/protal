@@ -1,19 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { Callout, PageHeader } from "@/components/domain/shared";
+import { formatDate } from "@/lib/dates";
 import { BookingForm } from "./booking-form";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const metadata = { title: "New booking" };
 
 export default async function NewBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unit?: string }>;
+  searchParams: Promise<{ unit?: string; checkIn?: string; checkOut?: string; block?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
+  // Opened from a "Blocked on Airbnb" period on the unit's calendar: the
+  // dates and the block's note come with it.
+  const checkIn = params.checkIn && ISO_DATE.test(params.checkIn) ? params.checkIn : undefined;
+  const checkOut =
+    params.checkOut && ISO_DATE.test(params.checkOut) && (!checkIn || params.checkOut > checkIn)
+      ? params.checkOut
+      : undefined;
+  const blockId = params.block && UUID.test(params.block) ? params.block : undefined;
 
-  const [, unitsResult, guestsResult, pricesResult] = await Promise.all([
+  const [, unitsResult, guestsResult, pricesResult, blockResult] = await Promise.all([
 
     requireCapability("bookings.manage"),
     supabase
@@ -29,7 +41,17 @@ export default async function NewBookingPage({
       .select("id, weekend_rate_aed, cleaning_fee_aed, weekly_discount_pct, monthly_discount_pct")
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"]),
+    blockId
+      ? supabase
+          .from("availability_blocks")
+          .select("unit_id, start_date, end_date, note")
+          .eq("id", blockId)
+          .eq("reason", "channel_sync")
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const block = blockResult.data;
+  const blockNote = block?.note && !/^Not available on /.test(block.note) ? block.note : null;
   const prices = new Map((pricesResult.data ?? []).map((p) => [p.id, p]));
 
   const units = (unitsResult.data ?? []).map((u) => ({
@@ -58,7 +80,24 @@ export default async function NewBookingPage({
           </Callout>
         </div>
       )}
-      <BookingForm units={units} guests={guestsResult.data ?? []} defaultUnitId={params.unit} />
+      {block && (
+        <div className="mb-5">
+          <Callout tone="info" title="A direct stay in an Airbnb block">
+            Blocked on Airbnb {formatDate(block.start_date)} → {formatDate(block.end_date)}
+            {blockNote ? ` (${blockNote})` : ""}. The dates are filled in; add the guest and
+            the price.
+          </Callout>
+        </div>
+      )}
+      <BookingForm
+        units={units}
+        guests={guestsResult.data ?? []}
+        defaultUnitId={block?.unit_id ?? params.unit}
+        defaultCheckIn={checkIn}
+        defaultCheckOut={checkOut}
+        defaultNotes={blockNote ?? undefined}
+        cancelHref={block ? `/units/${block.unit_id}?tab=calendar` : undefined}
+      />
     </>
   );
 }

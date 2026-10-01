@@ -11,6 +11,7 @@ import {
   parseMonth,
   rangesOverlap,
   shiftMonth,
+  uncoveredRanges,
 } from "@/lib/calendar";
 
 test("month arithmetic", () => {
@@ -55,4 +56,25 @@ test("nightsWithin clips a stay to a window", () => {
   assert.equal(nightsWithin("2026-09-28", "2026-10-05", "2026-09-01", "2026-09-30"), 3);
   assert.equal(nightsWithin("2026-10-01", "2026-10-05", "2026-09-01", "2026-09-30"), 0);
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
+});
+
+test("uncoveredRanges leaves what a block still has free", () => {
+  const block = ["2026-09-29", "2026-11-11"] as const;
+  assert.deepEqual(uncoveredRanges(...block, []), [{ start: "2026-09-29", end: "2026-11-11" }]);
+  assert.deepEqual(uncoveredRanges(...block, [{ start: "2026-09-29", end: "2026-11-11" }]), []);
+  assert.deepEqual(
+    uncoveredRanges(...block, [
+      { start: "2026-10-20", end: "2026-10-25" },
+      { start: "2026-09-29", end: "2026-10-05" },
+      { start: "2026-10-25", end: "2026-11-15" },
+    ]),
+    [{ start: "2026-10-05", end: "2026-10-20" }]
+  );
+  // Stays that start before or run past the block count only inside it.
+  assert.deepEqual(uncoveredRanges(...block, [{ start: "2026-09-20", end: "2026-10-01" }]), [
+    { start: "2026-10-01", end: "2026-11-11" },
+  ]);
+  assert.deepEqual(uncoveredRanges(...block, [{ start: "2026-12-01", end: "2026-12-05" }]), [
+    { start: "2026-09-29", end: "2026-11-11" },
+  ]);
 });

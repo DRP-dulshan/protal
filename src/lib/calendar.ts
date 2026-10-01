@@ -86,3 +86,24 @@ export function nightsWithin(checkIn: string, checkOut: string, from: string, to
   const endExclusive = checkOut < addDays(to, 1) ? checkOut : addDays(to, 1);
   return Math.max(0, nightsBetween(start, endExclusive));
 }
+
+/**
+ * The parts of [start, end) not covered by any of `ranges` (all half-open).
+ * Used for an Airbnb block that holds several direct stays: what is left to
+ * book.
+ */
+export function uncoveredRanges(
+  start: string,
+  end: string,
+  ranges: { start: string; end: string }[]
+): { start: string; end: string }[] {
+  const gaps: { start: string; end: string }[] = [];
+  let cursor = start;
+  for (const r of [...ranges].sort((a, b) => a.start.localeCompare(b.start))) {
+    if (r.end <= cursor || r.start >= end) continue;
+    if (r.start > cursor) gaps.push({ start: cursor, end: r.start });
+    if (r.end > cursor) cursor = r.end;
+  }
+  if (cursor < end) gaps.push({ start: cursor, end });
+  return gaps;
+}
