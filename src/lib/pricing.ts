@@ -67,3 +67,44 @@ export function quoteStay(
     accommodation: round2(nightsTotal - discount),
   };
 }
+
+/** An Airbnb stay with the nightly rate its guest paid (accommodation / nights). */
+export interface PricedStay {
+  checkIn: string;
+  checkOut: string;
+  nightlyRate: number;
+}
+
+export interface AirbnbRate {
+  /** Average nightly rate, whole dirhams, weighted by nights. */
+  rate: number;
+  stays: number;
+  from: string;
+  to: string;
+}
+
+const dayNumber = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86_400_000;
+
+/**
+ * What Airbnb guests paid a night at this unit around `day`: the nights of
+ * the (up to) `count` Airbnb stays whose check-in is closest to it. Airbnb
+ * does not publish its prices to other software, so the stays recorded from
+ * its earnings export are the nearest thing to "the Airbnb rate".
+ */
+export function airbnbRateNear(stays: PricedStay[], day: string, count = 5): AirbnbRate | null {
+  const target = dayNumber(day);
+  const nearest = stays
+    .filter((s) => s.nightlyRate > 0 && s.checkOut > s.checkIn)
+    .map((s) => ({ ...s, nights: dayNumber(s.checkOut) - dayNumber(s.checkIn) }))
+    .sort((a, b) => Math.abs(dayNumber(a.checkIn) - target) - Math.abs(dayNumber(b.checkIn) - target))
+    .slice(0, count);
+  if (nearest.length === 0) return null;
+  const nights = nearest.reduce((n, s) => n + s.nights, 0);
+  const total = nearest.reduce((n, s) => n + s.nightlyRate * s.nights, 0);
+  return {
+    rate: Math.round(total / nights),
+    stays: nearest.length,
+    from: nearest.reduce((m, s) => (s.checkIn < m ? s.checkIn : m), nearest[0].checkIn),
+    to: nearest.reduce((m, s) => (s.checkOut > m ? s.checkOut : m), nearest[0].checkOut),
+  };
+}

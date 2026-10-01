@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { quoteStay, stayDiscountPct } from "@/lib/pricing";
+import { airbnbRateNear, quoteStay, stayDiscountPct } from "@/lib/pricing";
 
 // 2026-10-05 is a Monday.
 const rates = { nightly: 340, weekend: 347, weeklyDiscountPct: 5, monthlyDiscountPct: 15 };
@@ -38,4 +38,21 @@ test("7 nights earn the weekly discount, 28 the monthly one, on the nights only"
 test("a discount agreed by staff replaces the unit's", () => {
   assert.equal(quoteStay("2026-10-05", "2026-10-07", rates, 10).discount, 68);
   assert.equal(quoteStay("2026-10-05", "2026-10-12", rates, 0).discount, 0);
+});
+
+test("airbnbRateNear averages the Airbnb stays closest to the dates, by night", () => {
+  const stays = [
+    { checkIn: "2026-01-02", checkOut: "2026-01-05", nightlyRate: 900 }, // far away
+    { checkIn: "2026-09-20", checkOut: "2026-09-22", nightlyRate: 400 }, // 2 nights
+    { checkIn: "2026-10-03", checkOut: "2026-10-09", nightlyRate: 500 }, // 6 nights
+    { checkIn: "2026-10-20", checkOut: "2026-10-21", nightlyRate: 0 }, // no price: ignored
+  ];
+  assert.deepEqual(airbnbRateNear(stays, "2026-10-01", 2), {
+    rate: 475, // (2 x 400 + 6 x 500) / 8
+    stays: 2,
+    from: "2026-09-20",
+    to: "2026-10-09",
+  });
+  assert.equal(airbnbRateNear(stays, "2026-10-01")?.stays, 3);
+  assert.equal(airbnbRateNear([], "2026-10-01"), null);
 });
