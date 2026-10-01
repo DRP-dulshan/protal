@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
   ROW_LINK,
+  ROW_CLICKABLE,
 } from "@/components/ui/table";
 import {
   UNIT_KIND,
@@ -30,6 +31,8 @@ import {
   parseEnum,
 } from "@/lib/labels";
 import { ExportButton } from "@/components/domain/export-button";
+import { Badge } from "@/components/ui/badge";
+import { dubaiToday } from "@/lib/calendar";
 
 export const metadata = { title: "Units" };
 
@@ -73,8 +76,20 @@ export default async function UnitsPage({
     );
   }
 
-  const [profile, { data: units, error }] = await Promise.all([requireCapability("units.view"), query]);
+  const today = dubaiToday();
+  const [profile, { data: units, error }, { data: tonight }] = await Promise.all([
+    requireCapability("units.view"),
+    query,
+    // Holiday homes with a guest staying tonight (bookings, not the stored status).
+    supabase
+      .from("bookings")
+      .select("unit_id")
+      .in("status", ["confirmed", "checked_in"])
+      .lte("check_in", today)
+      .gt("check_out", today),
+  ]);
   const rows = units ?? [];
+  const inHouse = new Set((tonight ?? []).map((b) => b.unit_id));
 
   const exportRows = rows.map((u) => ({
     Reference: u.reference_code ?? "",
@@ -197,7 +212,7 @@ export default async function UnitsPage({
             </TableHeader>
             <TableBody>
               {rows.map((unit) => (
-                <TableRow key={unit.id} className="relative cursor-pointer">
+                <TableRow key={unit.id} className={ROW_CLICKABLE}>
                   <TableCell>
                     <Link
                       href={`/units/${unit.id}`}
@@ -220,7 +235,11 @@ export default async function UnitsPage({
                     )}
                   </TableCell>
                   <TableCell>
-                    {unit.status && <UnitStatusBadge status={unit.status} />}
+                    {unit.id && inHouse.has(unit.id) ? (
+                      <Badge variant="success">Guest in house</Badge>
+                    ) : (
+                      unit.status && <UnitStatusBadge status={unit.status} />
+                    )}
                   </TableCell>
                   <TableCell className="hidden xl:table-cell">
                     <div className="flex flex-wrap gap-1">

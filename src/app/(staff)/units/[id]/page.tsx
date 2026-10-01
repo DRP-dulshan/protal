@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
   ROW_LINK,
+  ROW_CLICKABLE,
 } from "@/components/ui/table";
 import { DocumentList } from "@/components/domain/document-list";
 import { formatDate } from "@/lib/dates";
@@ -626,7 +627,7 @@ export default async function UnitDetailPage({
                     </TableHeader>
                     <TableBody>
                       {permits.map((permit) => (
-                        <TableRow key={permit.id} className={can(profile.role, "permits.manage") ? "relative cursor-pointer" : undefined}>
+                        <TableRow key={permit.id} className={can(profile.role, "permits.manage") ? ROW_CLICKABLE : undefined}>
                           <TableCell className="font-medium">
                             {can(profile.role, "permits.manage") ? (
                               <PermitDialog

@@ -85,9 +85,18 @@ export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableC
 
 /**
  * Class for the one link in a table row that opens the row's record. Its
- * ::after covers the whole row (the row needs `relative`), so a click anywhere
- * on the row opens the record while the link stays the single, keyboard-
- * reachable target.
+ * ::after covers the whole row (the row needs ROW_CLICKABLE), so a click
+ * anywhere on the row opens the record while the link stays the single,
+ * keyboard-reachable target.
  */
 export const ROW_LINK =
   "font-medium hover:underline after:absolute after:inset-0 after:content-['']";
+
+/**
+ * For a row holding a ROW_LINK. `relative` alone is not enough: some browsers
+ * (Safari before 16.4 among them) ignore position on a table row, so every
+ * row's link stretched over the whole table and the last row's won - any
+ * click opened the last record. A transform makes the row the containing
+ * block everywhere.
+ */
+export const ROW_CLICKABLE = "relative cursor-pointer [transform:translateZ(0)]";
