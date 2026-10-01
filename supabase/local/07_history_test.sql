@@ -203,3 +203,36 @@ begin
 
   raise notice 'TEST 46  PASS  ended stays post their payout (no VAT, check-out date, owner); corrections follow until stated';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 47 - a holiday-home unit reads "listed", not "vacant": on insert, when
+-- switched to short-term, and when a lease ends; switching back to long-term
+-- makes it vacant again. Leased and other statuses are left alone.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_prop uuid := (select property_id from units where unit_number = '2807');
+  u uuid;
+begin
+  insert into units (property_id, unit_number, kind, bedrooms, operating_mode)
+  values (v_prop, 'T-STATUS-1', 'apartment', 1, 'short_term')
+  returning id into u;
+  assert (select status from units where id = u) = 'listed_short_term', 'new holiday home is listed';
+
+  update units set operating_mode = 'long_term' where id = u;
+  assert (select status from units where id = u) = 'vacant', 'taken off short-term: vacant';
+
+  update units set operating_mode = 'both' where id = u;
+  assert (select status from units where id = u) = 'listed_short_term', 'back to listed';
+
+  update units set status = 'vacant' where id = u;  -- e.g. a lease ending
+  assert (select status from units where id = u) = 'listed_short_term', 'vacant short-term unit stays listed';
+
+  update units set status = 'occupied_long_term' where id = u;
+  assert (select status from units where id = u) = 'occupied_long_term', 'a lease is left alone';
+  update units set status = 'off_market' where id = u;
+  assert (select status from units where id = u) = 'off_market', 'other statuses are left alone';
+
+  delete from units where id = u;
+  raise notice 'TEST 47  PASS  holiday-home units are listed, not vacant';
+end $$;

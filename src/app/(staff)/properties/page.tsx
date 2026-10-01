@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PROPERTY_KIND, EMIRATE } from "@/lib/labels";
+import { addDays, dubaiToday } from "@/lib/calendar";
+import { summariseStays } from "@/lib/stays-summary";
 
 export const metadata = { title: "Properties" };
 
@@ -20,28 +22,49 @@ export default async function PropertiesPage({
   const archived = (await searchParams).show === "archived";
   const supabase = await createClient();
 
-  const [profile, propertiesResult, unitsResult] = await Promise.all([
+  const today = dubaiToday();
+  const from = addDays(today, -29);
+
+  const [profile, propertiesResult, unitsResult, staysResult] = await Promise.all([
     requireCapability("units.view"),
     supabase
       .from("properties")
       .select("*, communities(name, emirate)")
       .eq("is_active", !archived)
       .order("name"),
-    supabase.from("v_units_overview").select("property_id, status").eq("is_active", true),
+    supabase.from("v_units_overview").select("id, property_id, status").eq("is_active", true),
+    // The last 30 nights' stays, for holiday-home occupancy (as on the dashboard).
+    supabase
+      .from("bookings")
+      .select("unit_id, check_in, check_out, payout_expected_aed, gross_total_aed")
+      .in("status", ["confirmed", "checked_in", "checked_out"])
+      .lte("check_in", today)
+      .gt("check_out", from),
   ]);
 
   const canManage = can(profile.role, "properties.manage");
   const properties = propertiesResult.data ?? [];
   const units = unitsResult.data ?? [];
 
+  const stays = staysResult.data ?? [];
+
+  /**
+   * Occupancy over the last 30 nights, as on the dashboard: a leased unit is
+   * occupied every night, a holiday home on the nights it was booked. (A
+   * holiday home is "listed", not occupied, between guests.)
+   */
   const statsFor = (propertyId: string) => {
     const own = units.filter((u) => u.property_id === propertyId);
-    return {
-      total: own.length,
-      occupied: own.filter(
-        (u) => u.status === "occupied_long_term" || u.status === "listed_short_term"
-      ).length,
-    };
+    const leased = own.filter((u) => u.status === "occupied_long_term");
+    const leasedIds = new Set(leased.map((u) => u.id));
+    const ownIds = new Set(own.map((u) => u.id));
+    const booked = summariseStays(
+      stays.filter((b) => ownIds.has(b.unit_id) && !leasedIds.has(b.unit_id)),
+      from,
+      today
+    ).nights;
+    const rate = own.length ? Math.round(((leased.length * 30 + booked) / (own.length * 30)) * 100) : 0;
+    return { total: own.length, rate: Math.min(rate, 100) };
   };
 
   const exportRows = properties.map((p) => {
@@ -55,7 +78,7 @@ export default async function PropertiesPage({
       "Owners association": p.owners_association_name ?? "",
       "Mollak ID": p.mollak_property_id ?? "",
       "Units managed": stats.total,
-      Occupied: stats.occupied,
+      "Occupancy, last 30 nights (%)": stats.rate,
     };
   });
 
@@ -110,9 +133,6 @@ export default async function PropertiesPage({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {properties.map((property) => {
             const stats = statsFor(property.id);
-            const rate = stats.total
-              ? Math.round((stats.occupied / stats.total) * 100)
-              : 0;
 
             return (
               <Card key={property.id} className="flex h-full flex-col transition-shadow hover:shadow-md">
@@ -142,9 +162,9 @@ export default async function PropertiesPage({
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                          Occupied
+                          Occupancy · 30 nights
                         </p>
-                        <p className="tabular text-lg font-semibold">{rate}%</p>
+                        <p className="tabular text-lg font-semibold">{stats.rate}%</p>
                       </div>
                     </div>
 

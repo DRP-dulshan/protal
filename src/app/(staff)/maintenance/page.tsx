@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ROW_LINK,
+  ROW_CLICKABLE,
   Table,
   TableBody,
   TableCell,
@@ -162,7 +163,7 @@ export default async function MaintenancePage({
             </TableHeader>
             <TableBody>
               {tickets.map((t) => (
-                <TableRow key={t.id} className="relative cursor-pointer">
+                <TableRow key={t.id} className={ROW_CLICKABLE}>
                   <TableCell className="max-w-xs">
                     <Link href={`/maintenance/${t.id}`} className={ROW_LINK}>
                       {t.title}

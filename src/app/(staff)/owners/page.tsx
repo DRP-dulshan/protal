@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
   ROW_LINK,
+  ROW_CLICKABLE,
 } from "@/components/ui/table";
 
 export const metadata = { title: "Owners" };
@@ -134,7 +135,7 @@ export default async function OwnersPage({
             </TableHeader>
             <TableBody>
               {owners.map((owner) => (
-                <TableRow key={owner.id} className="relative cursor-pointer">
+                <TableRow key={owner.id} className={ROW_CLICKABLE}>
                   <TableCell>
                     <Link
                       href={`/owners/${owner.id}`}
