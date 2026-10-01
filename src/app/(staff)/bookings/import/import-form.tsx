@@ -15,7 +15,7 @@ import { FormError } from "@/components/domain/form";
 import { formatDate } from "@/lib/dates";
 import { importAirbnbEarnings, type ImportState } from "../actions";
 
-function Submit({ label = "Import" }: { label?: string }) {
+export function Submit({ label = "Import" }: { label?: string }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
@@ -29,20 +29,28 @@ function Submit({ label = "Import" }: { label?: string }) {
  * Past stays need a unit, and the file names only the Airbnb listing. Each
  * listing is matched once; the unit remembers it for every later import.
  */
-function MatchListings({
+export function MatchListings({
   state,
   action,
+  site = "Airbnb",
+  noun = "listing",
+  nouns = `${noun}s`,
 }: {
-  state: ImportState;
+  state: Pick<ImportState, "unmatched" | "units" | "csvText">;
   action: (formData: FormData) => void;
+  site?: string;
+  noun?: string;
+  nouns?: string;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Match Airbnb listings to units</CardTitle>
+        <CardTitle className="text-base">
+          Match {site} {nouns} to units
+        </CardTitle>
         <p className="text-sm text-[var(--muted-foreground)]">
-          The file has stays for these listings that are not in the portal. Choose the unit each
-          one is, and those stays are added. This is asked once per listing; leave one blank to
+          The file has stays for these {nouns} that are not in the portal. Choose the unit each
+          one is, and those stays are added. This is asked once per {noun}; leave one blank to
           skip it for now.
         </p>
       </CardHeader>

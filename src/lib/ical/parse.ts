@@ -145,3 +145,15 @@ export function toAirbnbEvents(events: ICalEvent[]): FeedEvent[] {
       };
     });
 }
+
+/**
+ * Booking.com's export marks every booked or closed night the same way
+ * ("CLOSED - Not available") and carries no reservation number, so each
+ * event is taken as a stay; the reservations export later adds the number,
+ * guest and price, matched on the dates.
+ */
+export function toBookingEvents(events: ICalEvent[]): FeedEvent[] {
+  return events
+    .filter((e) => e.status !== "CANCELLED")
+    .map((e) => ({ uid: e.uid, start: e.start, end: e.end, kind: "reservation" as const, code: null }));
+}

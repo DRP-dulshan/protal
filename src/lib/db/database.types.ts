@@ -4062,6 +4062,12 @@ export type Database = {
           weekly_discount_pct: number | null;
           monthly_discount_pct: number | null;
           airbnb_listing_name: string | null;
+          booking_ical_url: string | null;
+          booking_ical_last_synced_at: string | null;
+          booking_ical_last_status: string | null;
+          booking_ical_last_error: string | null;
+          booking_ical_last_event_count: number | null;
+          booking_listing_name: string | null;
         };
         Insert: {
           id?: string;
@@ -4107,6 +4113,12 @@ export type Database = {
           weekly_discount_pct?: number | null;
           monthly_discount_pct?: number | null;
           airbnb_listing_name?: string | null;
+          booking_ical_url?: string | null;
+          booking_ical_last_synced_at?: string | null;
+          booking_ical_last_status?: string | null;
+          booking_ical_last_error?: string | null;
+          booking_ical_last_event_count?: number | null;
+          booking_listing_name?: string | null;
         };
         Update: {
           id?: string;
@@ -4152,6 +4164,12 @@ export type Database = {
           weekly_discount_pct?: number | null;
           monthly_discount_pct?: number | null;
           airbnb_listing_name?: string | null;
+          booking_ical_url?: string | null;
+          booking_ical_last_synced_at?: string | null;
+          booking_ical_last_status?: string | null;
+          booking_ical_last_error?: string | null;
+          booking_ical_last_event_count?: number | null;
+          booking_listing_name?: string | null;
         };
         Relationships: [
           {
@@ -4637,6 +4655,10 @@ export type Database = {
     };
     Functions: {
       apply_airbnb_ical: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      apply_channel_ical: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };

@@ -43,6 +43,7 @@ import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
 import { PermitDialog } from "./permit-dialog";
 import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
 import { ChannelSync } from "./channel-sync";
+import { BookingComSync } from "./booking-com-sync";
 import { env } from "@/lib/env";
 import { BookingCalendar } from "@/components/domain/booking-calendar";
 import { dubaiToday, monthGrid, parseMonth } from "@/lib/calendar";
@@ -191,13 +192,15 @@ export default async function UnitDetailPage({
   const isShortTerm =
     unit.operating_mode === "short_term" || unit.operating_mode === "both";
   const hasValidPermit = overview?.has_valid_permit ?? false;
-  const lastSynced = unit.ical_last_synced_at
-    ? new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Asia/Dubai",
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date(unit.ical_last_synced_at))
-    : null;
+  const dubaiStamp = (value: string | null) =>
+    value
+      ? new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Dubai",
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(value))
+      : null;
+  const lastSynced = dubaiStamp(unit.ical_last_synced_at);
 
   return (
     <>
@@ -524,6 +527,15 @@ export default async function UnitDetailPage({
               error={unit.ical_last_error}
               eventCount={unit.ical_last_event_count}
               flaggedCount={hasValidPermit ? 0 : (flaggedResult.count ?? 0)}
+              canManage={can(profile.role, "bookings.manage")}
+            />
+            <BookingComSync
+              unitId={unit.id}
+              url={unit.booking_ical_url}
+              lastSynced={dubaiStamp(unit.booking_ical_last_synced_at)}
+              status={unit.booking_ical_last_status}
+              error={unit.booking_ical_last_error}
+              eventCount={unit.booking_ical_last_event_count}
               canManage={can(profile.role, "bookings.manage")}
             />
             <Card className="mb-5">

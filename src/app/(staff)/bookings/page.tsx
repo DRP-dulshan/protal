@@ -23,6 +23,7 @@ import {
 import { formatDate } from "@/lib/dates";
 import { dubaiToday } from "@/lib/calendar";
 import { BOOKING_STATUS, SALES_CHANNEL } from "@/lib/labels";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Bookings" };
 
@@ -41,16 +42,22 @@ type View = keyof typeof VIEWS;
 const LIVE = ["inquiry", "tentative", "confirmed", "checked_in"] as const;
 /** Stays that happen or happened, i.e. that should have a price. */
 const PRICED = ["tentative", "confirmed", "checked_in", "checked_out"] as const;
+/** The channel tabs above the list; "all" shows every channel. */
+const CHANNELS = { all: "All channels", airbnb: "Airbnb", booking_com: "Booking.com", direct: "Direct" } as const;
+type ChannelTab = keyof typeof CHANNELS;
+
 /** No payout either: an Airbnb stay can be priced with its payout alone. */
 const NO_PAYOUT = "payout_expected_aed.is.null,payout_expected_aed.eq.0";
 
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string; unit?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; unit?: string; channel?: string }>;
 }) {
   const params = await searchParams;
   const view: View = params.view && params.view in VIEWS ? (params.view as View) : "upcoming";
+  const channel: ChannelTab =
+    params.channel && params.channel in CHANNELS ? (params.channel as ChannelTab) : "all";
   const today = dubaiToday();
   const supabase = await createClient();
 
@@ -84,6 +91,7 @@ export default async function BookingsPage({
     query = query.order("check_in", { ascending: false });
   }
   if (params.unit && /^[0-9a-f-]{36}$/i.test(params.unit)) query = query.eq("unit_id", params.unit);
+  if (channel !== "all") query = query.eq("channel", channel);
   if (params.q) {
     const term = params.q.replace(/[%,()]/g, "");
     query = query.or(`booking_number.ilike.%${term}%,external_booking_id.ilike.%${term}%`);
@@ -158,6 +166,14 @@ export default async function BookingsPage({
               </Button>
             )}
             {canManage && (
+              <Button asChild variant="outline">
+                <Link href="/bookings/import/booking-com">
+                  <Upload className="size-4" />
+                  Import Booking.com
+                </Link>
+              </Button>
+            )}
+            {canManage && (
               <Button asChild>
                 <Link href="/bookings/new">
                   <Plus className="size-4" />
@@ -196,7 +212,7 @@ export default async function BookingsPage({
             tone="warning"
             title={`${unpriced} ${unpriced === 1 ? "stay has" : "stays have"} no price yet`}
           >
-            Airbnb stays arrive from the calendar with dates only.{" "}
+            Airbnb and Booking.com stays arrive from the calendar with dates only.{" "}
             <Link href="/bookings?view=needs_price" className="underline underline-offset-2">
               See them
             </Link>
@@ -206,6 +222,10 @@ export default async function BookingsPage({
                 <Link href="/bookings/import" className="underline underline-offset-2">
                   import Airbnb&apos;s earnings CSV
                 </Link>{" "}
+                or{" "}
+                <Link href="/bookings/import/booking-com" className="underline underline-offset-2">
+                  Booking.com&apos;s reservations
+                </Link>{" "}
                 to price them all at once
               </>
             )}
@@ -214,9 +234,37 @@ export default async function BookingsPage({
         </div>
       )}
 
+      {/* Channel tabs: each channel's stays on their own, filters kept. */}
+      <nav className="mb-3 flex flex-wrap gap-2" aria-label="Channel">
+        {(Object.keys(CHANNELS) as ChannelTab[]).map((c) => {
+          const qs = new URLSearchParams();
+          if (c !== "all") qs.set("channel", c);
+          if (view !== "upcoming") qs.set("view", view);
+          if (params.unit) qs.set("unit", params.unit);
+          if (params.q) qs.set("q", params.q);
+          const href = qs.size ? `/bookings?${qs}` : "/bookings";
+          return (
+            <Link
+              key={c}
+              href={href}
+              aria-current={c === channel ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium",
+                c === channel
+                  ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              )}
+            >
+              {CHANNELS[c]}
+            </Link>
+          );
+        })}
+      </nav>
+
       <Card className="mb-4">
         <CardContent className="p-3">
           <form className="flex flex-col gap-2 sm:flex-row">
+            {channel !== "all" && <input type="hidden" name="channel" value={channel} />}
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
               <Input
