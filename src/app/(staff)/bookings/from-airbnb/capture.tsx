@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Bookmark, ClipboardPaste, RotateCcw } from "lucide-react";
+import { Bookmark, ClipboardPaste, Copy, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,6 +59,40 @@ export function AirbnbCapture({ bookmarklet, units }: { bookmarklet: string; uni
             <li>Drag this button onto the bookmarks bar:</li>
           </ol>
           <BookmarkletLink code={bookmarklet} />
+          <details className="rounded-md border border-[var(--border)] p-3">
+            <summary className="cursor-pointer font-medium">Dragging does not work? Add it by hand</summary>
+            <div className="mt-3 space-y-3">
+              <CopyCode code={bookmarklet} />
+              <div>
+                <p className="font-medium">Chrome</p>
+                <ol className="list-decimal space-y-1 pl-5 text-[var(--muted-foreground)]">
+                  <li>
+                    Press <strong>⌘ + Option + B</strong> (Bookmark manager).
+                  </li>
+                  <li>
+                    Click <strong>Bookmarks bar</strong> on the left, then the <strong>⋮</strong>{" "}
+                    menu at the top right, then <strong>Add new bookmark</strong>.
+                  </li>
+                  <li>
+                    Name: <strong>Send to D|R|P</strong>. URL: paste (<strong>⌘ + V</strong>). Save.
+                  </li>
+                </ol>
+              </div>
+              <div>
+                <p className="font-medium">Safari</p>
+                <ol className="list-decimal space-y-1 pl-5 text-[var(--muted-foreground)]">
+                  <li>
+                    On this page press <strong>⌘ + D</strong>, choose <strong>Favorites</strong>, name
+                    it <strong>Send to D|R|P</strong> and click Add.
+                  </li>
+                  <li>
+                    Press <strong>⌘ + Option + B</strong>, right-click the new bookmark, choose{" "}
+                    <strong>Edit Address</strong> and paste (<strong>⌘ + V</strong>) over it.
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </details>
           <p className="font-medium">Using it</p>
           <ol className="list-decimal space-y-1 pl-5 text-[var(--muted-foreground)]">
             <li>Stay signed in to this portal.</li>
@@ -113,6 +148,35 @@ function BookmarkletLink({ code }: { code: string }) {
       <Bookmark className="size-4" />
       Send to D|R|P
     </a>
+  );
+}
+
+function CopyCode({ code }: { code: string }) {
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(code);
+            toast.success("Copied. Now add the bookmark as below.");
+          } catch {
+            toast.error("Could not copy. Click the code below, then press ⌘ + C.");
+          }
+        }}
+      >
+        <Copy className="size-4" />
+        Copy the button&apos;s code
+      </Button>
+      <input
+        readOnly
+        value={code}
+        onFocus={(e) => e.target.select()}
+        aria-label="The button's code"
+        className="block w-full rounded-md border border-[var(--border)] bg-[var(--muted)] px-2 py-1 font-mono text-xs"
+      />
+    </div>
   );
 }
 
