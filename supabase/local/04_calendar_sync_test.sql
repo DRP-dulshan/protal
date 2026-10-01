@@ -143,7 +143,7 @@ begin
   if (r->>'ok')::boolean or (r->>'created')::int <> 1
      or exists (select 1 from bookings where ical_uid = 'res-3@airbnb.com')
      or not exists (select 1 from bookings where ical_uid = 'res-4@airbnb.com')
-     or err not like '%overlaps another booking%' then
+     or err !~ 'overlaps DRP-BKG-.* \(direct, ' then
     raise exception 'TEST 26 FAILED: % / %', r, err;
   end if;
   raise notice 'TEST 26  PASS  clash reported ("%"), other stays imported', left(err, 60);

@@ -12,33 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { airbnbListingId, MAX_LISTINGS } from "@/lib/ical/listings";
 import { addAirbnbListings, type AddListingsState } from "../actions";
-import { FEED_CHANNEL_NAME, type FeedChannel } from "@/lib/ical/url";
-
-/** What differs between the Airbnb and Booking.com versions of the form. */
-const COPY: Record<FeedChannel, { where: React.ReactNode; placeholder: string; pricing: string }> = {
-  airbnb: {
-    where: (
-      <>
-        For each listing on Airbnb: open its <span className="font-medium">Calendar → Availability →
-        Connect calendars → Export calendar</span> and copy the link.
-      </>
-    ),
-    placeholder: "https://www.airbnb.com/calendar/ical/12345678.ics?s=…",
-    pricing: "copy them from the listing's Pricing on Airbnb",
-  },
-  booking_com: {
-    where: (
-      <>
-        For each property in the Booking.com extranet: open <span className="font-medium">Rates &amp;
-        Availability → Sync calendars → Export calendar</span> and copy the link. A unit that is
-        already in the portal (from Airbnb) is connected, not duplicated - use the same building
-        and unit number.
-      </>
-    ),
-    placeholder: "https://admin.booking.com/hotel/hoteladmin/ical.html?t=…",
-    pricing: "the rates D|R|P quotes for direct bookings",
-  },
-};
 
 interface Row {
   key: number;
@@ -98,15 +71,7 @@ function SubmitButton({ count, pending }: { count: number; pending: boolean }) {
   );
 }
 
-export function AddListingsForm({
-  buildings,
-  channel = "airbnb",
-}: {
-  buildings: string[];
-  channel?: FeedChannel;
-}) {
-  const copy = COPY[channel];
-  const site = FEED_CHANNEL_NAME[channel];
+export function AddListingsForm({ buildings }: { buildings: string[] }) {
   const [rows, setRows] = React.useState<Row[]>(() => [emptyRow()]);
   const [pasteOpen, setPasteOpen] = React.useState(false);
   const [pasted, setPasted] = React.useState("");
@@ -195,19 +160,21 @@ export function AddListingsForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-[var(--muted-foreground)]">
-            {copy.where} Buildings that do not exist yet are created.
+            For each listing on Airbnb: open its <span className="font-medium">Calendar → Availability →
+            Connect calendars → Export calendar</span> and copy the link. Buildings that do not
+            exist yet are created.
           </p>
 
           {pasteOpen && (
             <div className="space-y-2 rounded-lg border border-[var(--border)] p-3">
-              <Label htmlFor="pasted">{site} calendar links, one per line</Label>
+              <Label htmlFor="pasted">Airbnb calendar links, one per line</Label>
               <textarea
                 id="pasted"
                 value={pasted}
                 onChange={(e) => setPasted(e.target.value)}
                 rows={5}
                 className="w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-2 font-mono text-xs"
-                placeholder={`${copy.placeholder}\n${copy.placeholder}`}
+                placeholder={"https://www.airbnb.com/calendar/ical/12345678.ics?s=…\nhttps://www.airbnb.com/calendar/ical/87654321.ics?s=…"}
               />
               <Button type="button" size="sm" onClick={addPastedLinks}>
                 Add rows
@@ -239,7 +206,6 @@ export function AddListingsForm({
               React.startTransition(() => formAction(data));
             }}
           >
-            <input type="hidden" name="channel" value={channel} />
             <datalist id="buildings">
               {buildings.map((b) => (
                 <option key={b} value={b} />
@@ -253,9 +219,7 @@ export function AddListingsForm({
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
                       Row {i + 1}
-                      {channel === "airbnb" && listing && (
-                        <span className="ml-2 normal-case tracking-normal">Airbnb listing {listing}</span>
-                      )}
+                      {listing && <span className="ml-2 normal-case tracking-normal">Airbnb listing {listing}</span>}
                     </span>
                     {rows.length > 1 && (
                       <Button
@@ -308,20 +272,20 @@ export function AddListingsForm({
                     </div>
                   </div>
                   <div className="mt-2 space-y-1">
-                    <Label htmlFor={`link-${row.key}`}>{site} calendar link</Label>
+                    <Label htmlFor={`link-${row.key}`}>Airbnb calendar link</Label>
                     <Input
                       id={`link-${row.key}`}
                       name="link"
                       type="url"
                       value={row.link}
                       onChange={(e) => update(row.key, { link: e.target.value })}
-                      placeholder={copy.placeholder}
+                      placeholder="https://www.airbnb.com/calendar/ical/12345678.ics?s=…"
                       className="font-mono text-xs"
                     />
                   </div>
                   <fieldset className="mt-3">
                     <legend className="mb-1 text-xs text-[var(--muted-foreground)]">
-                      Prices for direct bookings (optional - {copy.pricing})
+                      Prices for direct bookings (optional - copy them from the listing&apos;s Pricing on Airbnb)
                     </legend>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                       {PRICE_INPUTS.map((f) => (

@@ -43,7 +43,7 @@ const LIVE = ["inquiry", "tentative", "confirmed", "checked_in"] as const;
 /** Stays that happen or happened, i.e. that should have a price. */
 const PRICED = ["tentative", "confirmed", "checked_in", "checked_out"] as const;
 /** The channel tabs above the list; "all" shows every channel. */
-const CHANNELS = { all: "All channels", airbnb: "Airbnb", booking_com: "Booking.com", direct: "Direct" } as const;
+const CHANNELS = { all: "All channels", airbnb: "Airbnb", direct: "Direct" } as const;
 type ChannelTab = keyof typeof CHANNELS;
 
 /** No payout either: an Airbnb stay can be priced with its payout alone. */
@@ -102,7 +102,7 @@ export default async function BookingsPage({
     query.limit(500),
     supabase
       .from("v_units_overview")
-      .select("id, unit_number, property_name")
+      .select("id, unit_number, property_name, owner_name")
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"])
       .order("property_name"),
@@ -135,9 +135,13 @@ export default async function BookingsPage({
   const canManage = can(profile.role, "bookings.manage");
   const unpriced = unpricedResult.count ?? 0;
 
+  // The unit's primary owner, shown with each stay.
+  const ownerOf = new Map((unitsResult.data ?? []).map((u) => [u.id, u.owner_name]));
+
   const exportRows = bookings.map((b) => ({
     Booking: b.booking_number,
     Unit: `${b.units?.properties?.name ?? ""} ${b.units?.unit_number ?? ""}`.trim(),
+    Owner: ownerOf.get(b.unit_id) ?? "",
     Guest: b.guests?.full_name ?? "",
     Channel: SALES_CHANNEL[b.channel],
     "Channel ref": b.external_booking_id ?? "",
@@ -162,14 +166,6 @@ export default async function BookingsPage({
                 <Link href="/bookings/import">
                   <Upload className="size-4" />
                   Import Airbnb earnings
-                </Link>
-              </Button>
-            )}
-            {canManage && (
-              <Button asChild variant="outline">
-                <Link href="/bookings/import/booking-com">
-                  <Upload className="size-4" />
-                  Import Booking.com
                 </Link>
               </Button>
             )}
@@ -212,7 +208,7 @@ export default async function BookingsPage({
             tone="warning"
             title={`${unpriced} ${unpriced === 1 ? "stay has" : "stays have"} no price yet`}
           >
-            Airbnb and Booking.com stays arrive from the calendar with dates only.{" "}
+            Airbnb stays arrive from the calendar with dates only.{" "}
             <Link href="/bookings?view=needs_price" className="underline underline-offset-2">
               See them
             </Link>
@@ -221,10 +217,6 @@ export default async function BookingsPage({
                 {" "}or{" "}
                 <Link href="/bookings/import" className="underline underline-offset-2">
                   import Airbnb&apos;s earnings CSV
-                </Link>{" "}
-                or{" "}
-                <Link href="/bookings/import/booking-com" className="underline underline-offset-2">
-                  Booking.com&apos;s reservations
                 </Link>{" "}
                 to price them all at once
               </>
@@ -346,10 +338,14 @@ export default async function BookingsPage({
                     {/* On a phone the unit sits under the booking, not in its own column. */}
                     <p className="text-xs sm:hidden">
                       {b.units?.properties?.name} · {b.units?.unit_number}
+                      {ownerOf.get(b.unit_id) && ` · ${ownerOf.get(b.unit_id)}`}
                     </p>
                   </TableCell>
                   <TableCell className="hidden text-sm sm:table-cell">
                     {b.units?.properties?.name} · {b.units?.unit_number}
+                    {ownerOf.get(b.unit_id) && (
+                      <p className="text-xs text-[var(--muted-foreground)]">Owner: {ownerOf.get(b.unit_id)}</p>
+                    )}
                   </TableCell>
                   <TableCell className="hidden text-sm md:table-cell">
                     {b.guests?.full_name ?? "—"}

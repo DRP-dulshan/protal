@@ -17,31 +17,3 @@ export function isAirbnbCalendarUrl(value: string): boolean {
     return false;
   }
 }
-
-/** Booking.com's extranet calendar export (https://admin.booking.com/…ical.html?t=…). */
-export function isBookingCalendarUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      (url.port === "" || url.port === "443") &&
-      /(^|\.)booking\.com$/i.test(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** The channels whose calendar feeds the portal reads. */
-export type FeedChannel = "airbnb" | "booking_com";
-
-export const FEED_CHANNEL_NAME: Record<FeedChannel, string> = {
-  airbnb: "Airbnb",
-  booking_com: "Booking.com",
-};
-
-export function isChannelCalendarUrl(channel: FeedChannel, value: string): boolean {
-  return channel === "airbnb" ? isAirbnbCalendarUrl(value) : isBookingCalendarUrl(value);
-}

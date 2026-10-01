@@ -38,6 +38,11 @@ export default async function BookingPage({
       .maybeSingle(),
   ]);
   if (!b) notFound();
+  const { data: unitOwner } = await supabase
+    .from("v_units_overview")
+    .select("owner_id, owner_name")
+    .eq("id", b.unit_id)
+    .maybeSingle();
 
   const unitLabel = `${b.units?.properties?.name ?? ""} · ${b.units?.unit_number ?? ""}`;
   // Airbnb's calendar feed carries no guest count; imports store a placeholder.
@@ -104,6 +109,15 @@ export default async function BookingPage({
                 {b.units ? (
                   <Link href={`/units/${b.units.id}`} className="hover:underline">
                     {unitLabel}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </Field>
+              <Field label="Owner">
+                {unitOwner?.owner_id ? (
+                  <Link href={`/owners/${unitOwner.owner_id}`} className="hover:underline">
+                    {unitOwner.owner_name}
                   </Link>
                 ) : (
                   "—"
