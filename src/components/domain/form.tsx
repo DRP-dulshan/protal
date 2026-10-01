@@ -52,7 +52,7 @@ export function TextField({
 }: React.ComponentProps<typeof Input> & {
   name: string;
   label: string;
-  hint?: string;
+  hint?: React.ReactNode;
   wide?: boolean;
 }) {
   return (

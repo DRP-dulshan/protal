@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { Callout, PageHeader } from "@/components/domain/shared";
 import { formatDate } from "@/lib/dates";
+import { addDays, dubaiToday } from "@/lib/calendar";
+import type { PricedStay } from "@/lib/pricing";
 import { BookingForm } from "./booking-form";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,7 +27,7 @@ export default async function NewBookingPage({
       : undefined;
   const blockId = params.block && UUID.test(params.block) ? params.block : undefined;
 
-  const [, unitsResult, guestsResult, pricesResult, blockResult] = await Promise.all([
+  const [, unitsResult, guestsResult, pricesResult, blockResult, airbnbResult] = await Promise.all([
 
     requireCapability("bookings.manage"),
     supabase
@@ -49,7 +51,25 @@ export default async function NewBookingPage({
           .eq("reason", "channel_sync")
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // What Airbnb guests paid a night at each unit over the last year and
+    // ahead: the starting rate for a direct stay (see airbnbRateNear).
+    supabase
+      .from("bookings")
+      .select("unit_id, check_in, check_out, nightly_rate_aed")
+      .eq("channel", "airbnb")
+      .in("status", ["confirmed", "checked_in", "checked_out"])
+      .gt("nightly_rate_aed", 0)
+      .gte("check_in", addDays(dubaiToday(), -365))
+      .limit(5000),
   ]);
+  const airbnbStays: Record<string, PricedStay[]> = {};
+  for (const b of airbnbResult.data ?? []) {
+    (airbnbStays[b.unit_id] ??= []).push({
+      checkIn: b.check_in,
+      checkOut: b.check_out,
+      nightlyRate: Number(b.nightly_rate_aed),
+    });
+  }
   const block = blockResult.data;
   const blockNote = block?.note && !/^Not available on /.test(block.note) ? block.note : null;
   const prices = new Map((pricesResult.data ?? []).map((p) => [p.id, p]));
@@ -92,6 +112,8 @@ export default async function NewBookingPage({
       <BookingForm
         units={units}
         guests={guestsResult.data ?? []}
+        airbnbStays={airbnbStays}
+        today={dubaiToday()}
         defaultUnitId={block?.unit_id ?? params.unit}
         defaultCheckIn={checkIn}
         defaultCheckOut={checkOut}

@@ -14,7 +14,8 @@ import {
 import { Callout } from "@/components/domain/shared";
 import { createBooking, type ActionState } from "../actions";
 import { SALES_CHANNEL, optionsFrom } from "@/lib/labels";
-import { quoteStay, stayDiscountPct } from "@/lib/pricing";
+import { airbnbRateNear, quoteStay, stayDiscountPct, type PricedStay } from "@/lib/pricing";
+import { formatDate } from "@/lib/dates";
 import { formatAED } from "@/lib/money";
 
 export type BookableUnit = {
@@ -39,6 +40,8 @@ const num = (v: string) => Number(v) || 0;
 export function BookingForm({
   units,
   guests,
+  airbnbStays,
+  today,
   defaultUnitId,
   defaultCheckIn,
   defaultCheckOut,
@@ -47,6 +50,9 @@ export function BookingForm({
 }: {
   units: BookableUnit[];
   guests: { id: string; full_name: string }[];
+  /** Airbnb stays with a known nightly rate, by unit. */
+  airbnbStays: Record<string, PricedStay[]>;
+  today: string;
   defaultUnitId?: string;
   defaultCheckIn?: string;
   defaultCheckOut?: string;
@@ -61,8 +67,11 @@ export function BookingForm({
   const [checkIn, setCheckIn] = React.useState(defaultCheckIn ?? "");
   const [checkOut, setCheckOut] = React.useState(defaultCheckOut ?? "");
   const initial = units.find((u) => u.id === defaultUnitId);
-  const [rate, setRate] = React.useState(initial?.nightlyRate ? String(initial.nightlyRate) : "");
-  const [weekendRate, setWeekendRate] = React.useState(initial?.weekendRate ? String(initial.weekendRate) : "");
+  // The nightly rate starts from what Airbnb guests paid at the unit around
+  // these dates (or the unit's own rate) until staff type their own.
+  const [useUnitRate, setUseUnitRate] = React.useState(false);
+  const [rate, setRate] = React.useState<string | null>(null);
+  const [weekendRate, setWeekendRate] = React.useState<string | null>(null);
   // Follows the unit's weekly/monthly discount for the chosen dates until
   // staff type their own.
   const [discount, setDiscount] = React.useState<string | null>(null);
@@ -77,7 +86,14 @@ export function BookingForm({
 
   const unit = units.find((u) => u.id === unitId);
   const validDates = Boolean(checkIn && checkOut && checkOut > checkIn);
-  const autoDiscount = validDates && unit
+  const airbnb = unit ? airbnbRateNear(airbnbStays[unit.id] ?? [], checkIn || today) : null;
+  // An Airbnb average already mixes weeknights and weekends, and long stays
+  // in it carry Airbnb's discounts: no weekend rate or unit discount on top.
+  const fromAirbnb = Boolean(airbnb) && !useUnitRate;
+  const autoRate = fromAirbnb ? String(airbnb!.rate) : unit?.nightlyRate ? String(unit.nightlyRate) : "";
+  const rateValue = rate ?? autoRate;
+  const weekendValue = weekendRate ?? (fromAirbnb ? "" : unit?.weekendRate ? String(unit.weekendRate) : "");
+  const autoDiscount = validDates && unit && !fromAirbnb
     ? stayDiscountPct(quoteStay(checkIn, checkOut, { nightly: 0 }).nights, {
         weeklyDiscountPct: unit.weeklyDiscountPct,
         monthlyDiscountPct: unit.monthlyDiscountPct,
@@ -85,7 +101,7 @@ export function BookingForm({
     : 0;
   const discountValue = discount ?? (autoDiscount ? String(autoDiscount) : "");
   const quote = validDates
-    ? quoteStay(checkIn, checkOut, { nightly: num(rate), weekend: num(weekendRate) }, num(discountValue))
+    ? quoteStay(checkIn, checkOut, { nightly: num(rateValue), weekend: num(weekendValue) }, num(discountValue))
     : null;
   const nights = quote?.nights ?? 0;
   const accommodation = quote?.accommodation ?? 0;
@@ -105,8 +121,9 @@ export function BookingForm({
           onChange={(e) => {
             setUnitId(e.target.value);
             const next = units.find((u) => u.id === e.target.value);
-            setRate(next?.nightlyRate ? String(next.nightlyRate) : "");
-            setWeekendRate(next?.weekendRate ? String(next.weekendRate) : "");
+            setRate(null);
+            setWeekendRate(null);
+            setUseUnitRate(false);
             setCleaning(next?.cleaningFee ? String(next.cleaningFee) : "");
             setDiscount(null);
           }}
@@ -191,7 +208,7 @@ export function BookingForm({
 
       <FormSection
         title="Price (AED)"
-        description="Prices are prefilled from the unit (Units → Edit). Tourism Dirham is collected for the government and not paid out."
+        description="The nightly rate starts from what Airbnb guests paid a night at this unit around these dates; the other prices come from the unit (Units → Edit). Type over any of them. Tourism Dirham is collected for the government and not paid out."
         columns={3}
       >
         <TextField
@@ -201,9 +218,48 @@ export function BookingForm({
           step="0.01"
           min="0"
           required
-          value={rate}
+          value={rateValue}
           onChange={(e) => setRate(e.target.value)}
-          hint="Sunday to Thursday nights"
+          hint={
+            airbnb && (rate !== null || !fromAirbnb) ? (
+              <>
+                Airbnb rate {formatAED(airbnb.rate)}.{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  onClick={() => {
+                    setRate(null);
+                    setWeekendRate(null);
+                    setUseUnitRate(false);
+                  }}
+                >
+                  Use it
+                </button>
+              </>
+            ) : fromAirbnb ? (
+              <>
+                From Airbnb: {airbnb!.stays} stay{airbnb!.stays === 1 ? "" : "s"},{" "}
+                {formatDate(airbnb!.from)} – {formatDate(airbnb!.to)}.
+                {unit?.nightlyRate ? (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={() => {
+                        setUseUnitRate(true);
+                        setWeekendRate(null);
+                      }}
+                    >
+                      Use the unit&apos;s rate ({formatAED(unit.nightlyRate)})
+                    </button>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              "Sunday to Thursday nights"
+            )
+          }
         />
         <TextField
           name="weekendRate"
@@ -211,7 +267,7 @@ export function BookingForm({
           type="number"
           step="0.01"
           min="0"
-          value={weekendRate}
+          value={weekendValue}
           onChange={(e) => setWeekendRate(e.target.value)}
           placeholder="Same as nightly"
           hint="Friday and Saturday nights"
@@ -271,18 +327,18 @@ export function BookingForm({
           {quote && quote.weekdayNights > 0 && (
             <div className="flex justify-between">
               <span>
-                {quote.weekdayNights} weeknight{quote.weekdayNights === 1 ? "" : "s"} × {formatAED(num(rate))}
+                {quote.weekdayNights} weeknight{quote.weekdayNights === 1 ? "" : "s"} × {formatAED(num(rateValue))}
               </span>
-              <span className="tabular">{formatAED(quote.weekdayNights * num(rate))}</span>
+              <span className="tabular">{formatAED(quote.weekdayNights * num(rateValue))}</span>
             </div>
           )}
           {quote && quote.weekendNights > 0 && (
             <div className="flex justify-between">
               <span>
                 {quote.weekendNights} weekend night{quote.weekendNights === 1 ? "" : "s"} ×{" "}
-                {formatAED(num(weekendRate) || num(rate))}
+                {formatAED(num(weekendValue) || num(rateValue))}
               </span>
-              <span className="tabular">{formatAED(quote.weekendNights * (num(weekendRate) || num(rate)))}</span>
+              <span className="tabular">{formatAED(quote.weekendNights * (num(weekendValue) || num(rateValue)))}</span>
             </div>
           )}
           {quote && quote.discount > 0 && (
