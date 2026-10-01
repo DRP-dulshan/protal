@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BedDouble, CalendarDays, LogIn, LogOut, Plus, Search, Upload } from "lucide-react";
+import { BedDouble, Bookmark, CalendarDays, LogIn, LogOut, Plus, Search, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -161,6 +161,14 @@ export default async function BookingsPage({
         actions={
           <>
             <ExportButton rows={exportRows} filename="drp-bookings" />
+            {canManage && (
+              <Button asChild variant="outline">
+                <Link href="/bookings/from-airbnb">
+                  <Bookmark className="size-4" />
+                  From Airbnb
+                </Link>
+              </Button>
+            )}
             {canManage && (
               <Button asChild variant="outline">
                 <Link href="/bookings/import">
