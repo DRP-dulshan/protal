@@ -4055,6 +4055,7 @@ export type Database = {
           cleaning_fee_aed: number | null;
           weekly_discount_pct: number | null;
           monthly_discount_pct: number | null;
+          airbnb_listing_name: string | null;
         };
         Insert: {
           id?: string;
@@ -4099,6 +4100,7 @@ export type Database = {
           cleaning_fee_aed?: number | null;
           weekly_discount_pct?: number | null;
           monthly_discount_pct?: number | null;
+          airbnb_listing_name?: string | null;
         };
         Update: {
           id?: string;
@@ -4143,6 +4145,7 @@ export type Database = {
           cleaning_fee_aed?: number | null;
           weekly_discount_pct?: number | null;
           monthly_discount_pct?: number | null;
+          airbnb_listing_name?: string | null;
         };
         Relationships: [
           {

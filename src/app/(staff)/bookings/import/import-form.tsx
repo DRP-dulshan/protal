@@ -6,21 +6,71 @@ import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Callout } from "@/components/domain/shared";
 import { FormError } from "@/components/domain/form";
 import { formatDate } from "@/lib/dates";
 import { importAirbnbEarnings, type ImportState } from "../actions";
 
-function Submit() {
+function Submit({ label = "Import" }: { label?: string }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
       <Upload className="size-4" />
-      {pending ? "Importing…" : "Import"}
+      {pending ? "Importing…" : label}
     </Button>
+  );
+}
+
+/**
+ * Past stays need a unit, and the file names only the Airbnb listing. Each
+ * listing is matched once; the unit remembers it for every later import.
+ */
+function MatchListings({
+  state,
+  action,
+}: {
+  state: ImportState;
+  action: (formData: FormData) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Match Airbnb listings to units</CardTitle>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          The file has past stays for these listings. Choose the unit each one is, and those stays
+          are added. This is asked once per listing; leave one blank to skip it for now.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="csvText" value={state.csvText ?? ""} />
+          {state.unmatched!.map((m) => (
+            <div key={m.listing} className="grid gap-2 sm:grid-cols-2 sm:items-center">
+              <div className="text-sm">
+                <p className="font-medium">{m.listing}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {m.stays} past {m.stays === 1 ? "stay" : "stays"}
+                </p>
+              </div>
+              <input type="hidden" name="matchListing" value={m.listing} />
+              <Select name="matchUnit" defaultValue="" aria-label={`Unit for ${m.listing}`}>
+                <option value="">Skip for now</option>
+                {state.units!.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ))}
+          <Submit label="Save matches and import" />
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -43,14 +93,27 @@ export function ImportForm() {
         </CardContent>
       </Card>
 
+      {(state.unmatched?.length ?? 0) > 0 && <MatchListings state={state} action={action} />}
+
       {state.success && (
         <Callout tone="info" title={state.success}>
           <ul className="mt-1 list-disc space-y-1 pl-5">
+            {(state.overlapping?.length ?? 0) > 0 && (
+              <li>
+                Already in the portal on the same dates, left as they are:{" "}
+                {state.overlapping!.join(", ")}.
+              </li>
+            )}
+            {(state.failed?.length ?? 0) > 0 && (
+              <li>
+                Could not be added: {state.failed!.join("; ")}.
+              </li>
+            )}
             {(state.notFound?.length ?? 0) > 0 && (
               <li>
                 Not in the portal yet ({state.notFound!.length}): {state.notFound!.join(", ")}. These
-                stays have not come in from the Airbnb calendar, or their unit has no calendar link.
-                Sync the calendar and import the file again.
+                stays have not ended yet and have not come in from the Airbnb calendar, or their unit
+                has no calendar link. Sync the calendar and import the file again.
               </li>
             )}
             {(state.otherCurrency?.length ?? 0) > 0 && (
