@@ -319,3 +319,52 @@ begin
   delete from units where id = v_unit;
   raise notice 'TEST 49  PASS  Booking.com-only unit: new stays announced after the first read';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 50 - a stay first imported from the Booking.com export, then read from
+-- its feed twice under two different UIDs, stays one booking (no clash, no
+-- cancellation); a real clash names the booking in the way.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_prop uuid := (select property_id from units where unit_number = '2807');
+  v_unit uuid;
+  b uuid;
+  r jsonb;
+begin
+  insert into units (property_id, unit_number, kind, bedrooms, operating_mode)
+  values (v_prop, 'T-BDC-50', 'apartment', 1, 'short_term')
+  returning id into v_unit;
+
+  -- From the reservations export: number, no UID.
+  insert into bookings (booking_number, unit_id, channel, status, import_source, check_in, check_out,
+                        adults, external_booking_id)
+  values ('', v_unit, 'booking_com', 'confirmed', 'earnings_csv', '2029-10-29', '2029-12-01', 1, '5600987303')
+  returning id into b;
+
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'uid-A@booking.com', 'start', '2029-10-29', 'end', '2029-12-01', 'kind', 'reservation')), null);
+  assert (r->>'ok')::boolean, 'first read: ' || r;
+  assert (select ical_uid from bookings where id = b) = 'uid-A@booking.com', 'adopted';
+
+  -- Next export, new UID for the same stay.
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'uid-B@booking.com', 'start', '2029-10-29', 'end', '2029-12-01', 'kind', 'reservation')), null);
+  assert (r->>'ok')::boolean, 'second read has no clash: ' || r;
+  assert (select count(*) from bookings where unit_id = v_unit) = 1, 'still one booking';
+  assert (select status from bookings where id = b) = 'confirmed', 'not cancelled';
+  assert (select ical_uid from bookings where id = b) = 'uid-B@booking.com', 'follows the new UID';
+  assert (select external_booking_id from bookings where id = b) = '5600987303', 'number kept';
+
+  -- A real clash (another channel on overlapping nights) names that booking.
+  insert into bookings (booking_number, unit_id, channel, status, ical_uid, check_in, check_out, adults, external_booking_id)
+  values ('', v_unit, 'airbnb', 'confirmed', 'abnb-50@airbnb.com', '2029-12-05', '2029-12-09', 1, 'HMCLASH050');
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'uid-B@booking.com', 'start', '2029-10-29', 'end', '2029-12-01', 'kind', 'reservation'),
+         jsonb_build_object('uid', 'uid-C@booking.com', 'start', '2029-12-07', 'end', '2029-12-10', 'kind', 'reservation')), null);
+  assert r->'errors'->>0 ~ 'overlaps DRP-BKG-.* \(Airbnb HMCLASH050, 05 Dec - 09 Dec 2029\)', 'names the clash: ' || r;
+
+  delete from bookings where unit_id = v_unit;
+  delete from units where id = v_unit;
+  raise notice 'TEST 50  PASS  feed stays follow a changed UID; clashes name the booking in the way';
+end $$;

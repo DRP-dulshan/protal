@@ -107,7 +107,7 @@ export function BookingComSync(props: {
                 name="bookingIcalUrl"
                 type="url"
                 defaultValue={props.url ?? ""}
-                placeholder="https://admin.booking.com/hotel/hoteladmin/ical.html?t=…"
+                placeholder="https://ical.booking.com/v1/export?t=…"
                 className="font-mono text-xs"
               />
               <SaveButton />

@@ -18,7 +18,7 @@ export function isAirbnbCalendarUrl(value: string): boolean {
   }
 }
 
-/** Booking.com's extranet calendar export (https://admin.booking.com/…ical.html?t=…). */
+/** Booking.com's calendar export (https://ical.booking.com/v1/export?t=…, or an older admin.booking.com link). */
 export function isBookingCalendarUrl(value: string): boolean {
   try {
     const url = new URL(value);

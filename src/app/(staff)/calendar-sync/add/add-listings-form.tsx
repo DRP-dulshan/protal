@@ -35,7 +35,7 @@ const COPY: Record<FeedChannel, { where: React.ReactNode; placeholder: string; p
         and unit number.
       </>
     ),
-    placeholder: "https://admin.booking.com/hotel/hoteladmin/ical.html?t=…",
+    placeholder: "https://ical.booking.com/v1/export?t=…",
     pricing: "the rates D|R|P quotes for direct bookings",
   },
 };

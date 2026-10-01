@@ -33,7 +33,7 @@ export async function fetchCalendar(url: string, channel: FeedChannel = "airbnb"
       throw new ICalError(
         channel === "airbnb"
           ? "The calendar link must be an https://www.airbnb… iCal export URL."
-          : "The calendar link must be an https://admin.booking.com… iCal export URL."
+          : "The calendar link must be a Booking.com iCal export URL (https://ical.booking.com…)."
       );
     }
 

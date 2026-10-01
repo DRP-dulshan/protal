@@ -100,7 +100,7 @@ export async function saveBookingLink(
   if (url && !isBookingCalendarUrl(url)) {
     return {
       error:
-        "That is not a Booking.com calendar link. In the Booking.com extranet open Rates & Availability → Sync calendars → Export calendar, and copy the link (it starts with https://admin.booking.com…).",
+        "That is not a Booking.com calendar link. In the Booking.com extranet open Rates & Availability → Sync calendars → Export calendar, and copy the link (it starts with https://ical.booking.com…).",
     };
   }
 
