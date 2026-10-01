@@ -560,6 +560,40 @@ export async function removeBlock(
   return { success: "Block removed. The dates are free again." };
 }
 
+const blockNoteSchema = z.object({
+  blockId: z.string().uuid(),
+  unitId: z.string().uuid(),
+  note: z.string().trim().max(500, "Keep the note under 500 characters."),
+});
+
+/**
+ * Sets or clears a block's note - including a "Blocked on Airbnb" period,
+ * whose note Airbnb's calendar feed does not carry. The sync only ever moves
+ * a synced block's dates, so the note stays until the block itself goes.
+ */
+export async function updateBlockNote(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) {
+    return { error: "You do not have permission to change the calendar." };
+  }
+  const parsed = blockNoteSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Block not found." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("availability_blocks")
+    .update({ note: parsed.data.note || null })
+    .eq("id", parsed.data.blockId)
+    .eq("unit_id", parsed.data.unitId)
+    .neq("reason", "booking")
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "This block could not be changed." };
+
+  revalidatePath(`/units/${parsed.data.unitId}`);
+  return { success: parsed.data.note ? "Note saved." : "Note removed." };
+}
+
 // ---------------------------------------------------------------------------
 // Prices: Airbnb stays arrive from the calendar feed with dates only.
 // ---------------------------------------------------------------------------

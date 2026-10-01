@@ -368,3 +368,33 @@ begin
   delete from units where id = v_unit;
   raise notice 'TEST 50  PASS  feed stays follow a changed UID; clashes name the booking in the way';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 51 - a note added to a "Blocked on Airbnb" period survives the next
+-- sync (which may move the dates) and goes with the block when Airbnb frees
+-- the dates.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_prop uuid := (select property_id from units where unit_number = '2807');
+  v_unit uuid;
+begin
+  insert into units (property_id, unit_number, kind, bedrooms, operating_mode)
+  values (v_prop, 'T-NOTE-51', 'apartment', 1, 'short_term')
+  returning id into v_unit;
+
+  perform apply_airbnb_ical(v_unit, jsonb_build_array(jsonb_build_object(
+    'uid', 'blk-51@airbnb.com', 'start', '2029-09-29', 'end', '2029-11-11', 'kind', 'blocked')), null);
+  update availability_blocks set note = 'Long stay - paid directly' where ical_uid = 'blk-51@airbnb.com';
+
+  perform apply_airbnb_ical(v_unit, jsonb_build_array(jsonb_build_object(
+    'uid', 'blk-51@airbnb.com', 'start', '2029-09-29', 'end', '2029-11-15', 'kind', 'blocked')), null);
+  assert (select note from availability_blocks where ical_uid = 'blk-51@airbnb.com') = 'Long stay - paid directly', 'note kept';
+  assert (select end_date from availability_blocks where ical_uid = 'blk-51@airbnb.com') = '2029-11-15', 'dates follow Airbnb';
+
+  perform apply_airbnb_ical(v_unit, '[]'::jsonb, null);
+  assert not exists (select 1 from availability_blocks where ical_uid = 'blk-51@airbnb.com'), 'freed on Airbnb: gone';
+
+  delete from units where id = v_unit;
+  raise notice 'TEST 51  PASS  notes on Airbnb blocks survive syncs';
+end $$;

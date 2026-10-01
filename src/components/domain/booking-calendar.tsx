@@ -23,6 +23,8 @@ export interface CalendarBlock {
   id: string;
   start: string;
   end: string;
+  /** Staff note, shown on the block and in its tooltip. */
+  note?: string | null;
   reason: Enums<"block_reason">;
 }
 
@@ -117,7 +119,8 @@ export function BookingCalendar({
                   `${stay.checkIn} → ${stay.checkOut} · ${nightsBetween(stay.checkIn, stay.checkOut)} nights` +
                   (stay.label ? ` · ${stay.label}` : "")
                 : block
-                  ? `${BLOCK_LABEL[block.reason]} · ${block.start} → ${block.end}`
+                  ? `${BLOCK_LABEL[block.reason]} · ${block.start} → ${block.end}` +
+                    (block.note ? ` · ${block.note}` : "")
                   : undefined;
 
               const cell = (
@@ -165,7 +168,7 @@ export function BookingCalendar({
 
                   {block && (
                     <div className={cn("mt-1 truncate rounded px-1 py-0.5 text-[10px] font-medium sm:text-[11px]", BLOCK_TONE)}>
-                      {block.start === day || i === 0 ? BLOCK_LABEL[block.reason] : " "}
+                      {block.start === day || i === 0 ? (block.note ?? BLOCK_LABEL[block.reason]) : " "}
                     </div>
                   )}
                 </div>
