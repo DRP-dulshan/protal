@@ -1,4 +1,4 @@
-import { isAirbnbCalendarUrl } from "./url";
+import { FEED_CHANNEL_NAME, isChannelCalendarUrl, type FeedChannel } from "./url";
 
 /** One Airbnb listing to add as a holiday-home unit. */
 export interface ListingRow {
@@ -44,12 +44,16 @@ export function airbnbListingId(link: string): string | null {
  * empty are dropped; every other problem is reported against its row number
  * (1-based, as the form shows them) so nothing is created until all are fixed.
  */
-export function parseListingRows(fields: {
+export function parseListingRows(
+  fields: {
   building: string[];
   unitNumber: string[];
   bedrooms: string[];
   link: string[];
-} & Partial<Record<keyof ListingPrices, string[]>>): { rows: ListingRow[]; errors: string[] } {
+} & Partial<Record<keyof ListingPrices, string[]>>,
+  channel: FeedChannel = "airbnb"
+): { rows: ListingRow[]; errors: string[] } {
+  const site = FEED_CHANNEL_NAME[channel];
   const rows: ListingRow[] = [];
   const errors: string[] = [];
   const seenLinks = new Map<string, number>();
@@ -64,8 +68,10 @@ export function parseListingRows(fields: {
     if (!building && !unitNumber && !link) continue;
 
     const n = i + 1;
-    if (!link) errors.push(`Row ${n}: paste the listing's Airbnb calendar link.`);
-    else if (!isAirbnbCalendarUrl(link)) errors.push(`Row ${n}: that is not an Airbnb calendar link.`);
+    if (!link) errors.push(`Row ${n}: paste the listing's ${site} calendar link.`);
+    else if (!isChannelCalendarUrl(channel, link)) {
+      errors.push(`Row ${n}: that is not ${channel === "airbnb" ? "an" : "a"} ${site} calendar link.`);
+    }
     if (!building) errors.push(`Row ${n}: enter the building or community.`);
     else if (building.length > 120) errors.push(`Row ${n}: the building name is too long.`);
     if (!unitNumber) errors.push(`Row ${n}: enter the unit number.`);
@@ -87,7 +93,7 @@ export function parseListingRows(fields: {
 
     if (link) {
       const earlier = seenLinks.get(link);
-      if (earlier) errors.push(`Row ${n}: the same Airbnb link is already in row ${earlier}.`);
+      if (earlier) errors.push(`Row ${n}: the same ${site} link is already in row ${earlier}.`);
       else seenLinks.set(link, n);
     }
     if (building && unitNumber) {

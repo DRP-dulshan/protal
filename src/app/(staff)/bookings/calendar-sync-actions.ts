@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { isAirbnbCalendarUrl, syncAllUnits, syncUnit, type SyncResult } from "@/lib/ical/sync";
+import { FEED_CHANNEL_NAME, isBookingCalendarUrl, type FeedChannel } from "@/lib/ical/url";
 import { flushEmailsSoon } from "@/lib/notify/flush";
 
 export type SyncActionState = { error?: string; success?: string };
@@ -32,7 +33,7 @@ function describe(result: SyncResult): SyncActionState {
   ].filter(Boolean);
   const summary = parts.length ? parts.join(", ") : "no changes";
   return result.ok
-    ? { success: `Synced with Airbnb: ${summary}.` }
+    ? { success: `Synced with ${FEED_CHANNEL_NAME[result.channel ?? "airbnb"]}: ${summary}.` }
     : { error: `Synced with problems (${summary}): ${result.errors[0]}` };
 }
 
@@ -85,22 +86,67 @@ export async function saveAirbnbLink(
   return outcome.success ? { success: `Link saved. ${outcome.success}` } : outcome;
 }
 
-/** "Sync now" for one unit. */
-export async function syncUnitNow(id: string): Promise<SyncActionState> {
+/** Saves (or clears) a unit's Booking.com calendar link, then syncs it straight away. */
+export async function saveBookingLink(
+  id: string,
+  _prev: SyncActionState,
+  formData: FormData
+): Promise<SyncActionState> {
   const denied = await requireManager();
   if (denied) return { error: denied };
   if (!unitId.safeParse(id).success) return { error: "Unknown unit." };
 
+  const url = String(formData.get("bookingIcalUrl") ?? "").trim();
+  if (url && !isBookingCalendarUrl(url)) {
+    return {
+      error:
+        "That is not a Booking.com calendar link. In the Booking.com extranet open Rates & Availability → Sync calendars → Export calendar, and copy the link (it starts with https://admin.booking.com…).",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("units")
+    .update({
+      booking_ical_url: url || null,
+      ...(url
+        ? {}
+        : { booking_ical_last_status: null, booking_ical_last_error: null, booking_ical_last_synced_at: null }),
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "You do not have access to this unit." };
+
+  if (!url) {
+    refresh(id);
+    return { success: "Booking.com link removed. Imported bookings stay as they are." };
+  }
+
+  const result = await syncUnit(supabase, id, url, "booking_com");
+  refresh(id);
+  const outcome = describe(result);
+  return outcome.success ? { success: `Link saved. ${outcome.success}` } : outcome;
+}
+
+/** "Sync now" for one unit's feed on one channel. */
+export async function syncUnitNow(id: string, channel: FeedChannel = "airbnb"): Promise<SyncActionState> {
+  const denied = await requireManager();
+  if (denied) return { error: denied };
+  if (!unitId.safeParse(id).success) return { error: "Unknown unit." };
+  if (channel !== "airbnb" && channel !== "booking_com") return { error: "Unknown channel." };
+
   const supabase = await createClient();
   const { data: unit } = await supabase
     .from("units")
-    .select("id, airbnb_ical_url")
+    .select("id, airbnb_ical_url, booking_ical_url")
     .eq("id", id)
     .maybeSingle();
   if (!unit) return { error: "You do not have access to this unit." };
-  if (!unit.airbnb_ical_url) return { error: "Add the unit's Airbnb calendar link first." };
+  const url = channel === "airbnb" ? unit.airbnb_ical_url : unit.booking_ical_url;
+  if (!url) return { error: `Add the unit's ${FEED_CHANNEL_NAME[channel]} calendar link first.` };
 
-  const result = await syncUnit(supabase, id, unit.airbnb_ical_url);
+  const result = await syncUnit(supabase, id, url, channel);
   refresh(id);
   return describe(result);
 }
@@ -114,11 +160,11 @@ export async function syncAllNow(): Promise<SyncActionState> {
   const results = await syncAllUnits(supabase);
   refresh();
 
-  if (results.length === 0) return { error: "No units have an Airbnb calendar link yet." };
+  if (results.length === 0) return { error: "No units have an Airbnb or Booking.com calendar link yet." };
   const failed = results.filter((r) => !r.ok).length;
   const created = results.reduce((n, r) => n + (r.created ?? 0), 0);
   const cancelled = results.reduce((n, r) => n + (r.cancelled ?? 0), 0);
-  const summary = `${results.length} ${results.length === 1 ? "unit" : "units"} synced: ${created} new, ${cancelled} cancelled`;
+  const summary = `${results.length} ${results.length === 1 ? "calendar" : "calendars"} synced: ${created} new, ${cancelled} cancelled`;
   return failed ? { error: `${summary}. ${failed} had problems - see the table.` } : { success: `${summary}.` };
 }
 

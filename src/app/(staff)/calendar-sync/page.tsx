@@ -18,6 +18,8 @@ import {
 import { dubaiToday } from "@/lib/calendar";
 import { SyncStatusBadge } from "../units/[id]/channel-sync";
 import { SyncAllButton } from "./sync-all-button";
+import { FEED_CHANNEL_NAME, type FeedChannel } from "@/lib/ical/url";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Calendar sync" };
 
@@ -27,8 +29,14 @@ const dubaiTime = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
 });
 
-/** Sync status of every holiday-home unit's Airbnb calendar, in one place. */
-export default async function CalendarSyncPage() {
+/** Sync status of every holiday-home unit's calendar, one channel at a time. */
+export default async function CalendarSyncPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ channel?: string }>;
+}) {
+  const channel: FeedChannel = (await searchParams).channel === "booking_com" ? "booking_com" : "airbnb";
+  const site = FEED_CHANNEL_NAME[channel];
   const supabase = await createClient();
   const today = dubaiToday();
 
@@ -37,7 +45,7 @@ export default async function CalendarSyncPage() {
     supabase
       .from("units")
       .select(
-        "id, unit_number, airbnb_ical_url, ical_last_synced_at, ical_last_status, ical_last_error, ical_last_event_count, properties(name)"
+        "id, unit_number, airbnb_ical_url, ical_last_synced_at, ical_last_status, ical_last_error, ical_last_event_count, booking_ical_url, booking_ical_last_synced_at, booking_ical_last_status, booking_ical_last_error, booking_ical_last_event_count, properties(name)"
       )
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"])
@@ -47,6 +55,7 @@ export default async function CalendarSyncPage() {
       .from("bookings")
       .select("unit_id")
       .eq("imported_without_permit", true)
+      .eq("channel", channel)
       .in("status", ["confirmed", "checked_in"])
       .gt("check_out", today),
   ]);
@@ -56,18 +65,30 @@ export default async function CalendarSyncPage() {
   const flagged = new Map<string, number>();
   for (const b of flaggedResult.data ?? []) flagged.set(b.unit_id, (flagged.get(b.unit_id) ?? 0) + 1);
 
-  const units = (unitsResult.data ?? []).sort((a, b) =>
-    `${a.properties?.name} ${a.unit_number}`.localeCompare(`${b.properties?.name} ${b.unit_number}`)
-  );
-  const linked = units.filter((u) => u.airbnb_ical_url);
-  const problems = linked.filter((u) => u.ical_last_status === "error").length;
+  // One shape for either channel's feed columns.
+  const units = (unitsResult.data ?? [])
+    .map((u) => ({
+      id: u.id,
+      unit_number: u.unit_number,
+      properties: u.properties,
+      url: channel === "airbnb" ? u.airbnb_ical_url : u.booking_ical_url,
+      syncedAt: channel === "airbnb" ? u.ical_last_synced_at : u.booking_ical_last_synced_at,
+      status: channel === "airbnb" ? u.ical_last_status : u.booking_ical_last_status,
+      error: channel === "airbnb" ? u.ical_last_error : u.booking_ical_last_error,
+      events: channel === "airbnb" ? u.ical_last_event_count : u.booking_ical_last_event_count,
+    }))
+    .sort((a, b) =>
+      `${a.properties?.name} ${a.unit_number}`.localeCompare(`${b.properties?.name} ${b.unit_number}`)
+    );
+  const linked = units.filter((u) => u.url);
+  const problems = linked.filter((u) => u.status === "error").length;
   const canManage = can(profile.role, "bookings.manage");
   const canAdd = can(profile.role, "properties.manage");
   const addButton = canAdd ? (
     <Button asChild variant={linked.length > 0 ? "outline" : "default"}>
-      <Link href="/calendar-sync/add">
+      <Link href={channel === "airbnb" ? "/calendar-sync/add" : "/calendar-sync/add?channel=booking_com"}>
         <Plus className="size-4" />
-        Add Airbnb listings
+        Add {site} listings
       </Link>
     </Button>
   ) : null;
@@ -76,7 +97,7 @@ export default async function CalendarSyncPage() {
     <>
       <PageHeader
         title="Calendar sync"
-        description="Airbnb calendars are imported every 15 minutes. Each unit's export link keeps Airbnb closed on dates booked elsewhere."
+        description="Airbnb and Booking.com calendars are imported every 15 minutes, each on its own."
         actions={
           <>
             {addButton}
@@ -85,11 +106,29 @@ export default async function CalendarSyncPage() {
         }
       />
 
+      <nav className="mb-4 flex gap-2" aria-label="Channel">
+        {(["airbnb", "booking_com"] as const).map((c) => (
+          <Link
+            key={c}
+            href={c === "airbnb" ? "/calendar-sync" : "/calendar-sync?channel=booking_com"}
+            aria-current={c === channel ? "page" : undefined}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium",
+              c === channel
+                ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            )}
+          >
+            {FEED_CHANNEL_NAME[c]}
+          </Link>
+        ))}
+      </nav>
+
       {problems > 0 && (
         <div className="mb-4">
           <Callout tone="danger" title={`${problems} ${problems === 1 ? "unit has" : "units have"} a sync problem`}>
             Open the unit to see the message. A clash usually means the same nights
-            were booked directly and on Airbnb.
+            were booked on another channel or directly as well as on {site}.
           </Callout>
         </div>
       )}
@@ -97,7 +136,7 @@ export default async function CalendarSyncPage() {
       {units.length === 0 ? (
         <EmptyState
           title="No holiday-home units"
-          description="Add your Airbnb listings to bring them in as holiday-home units, with their calendars connected."
+          description={`Add your ${site} listings to bring them in as holiday-home units, with their calendars connected.`}
           icon={<RefreshCw className="size-8" />}
           action={addButton ?? undefined}
         />
@@ -109,7 +148,7 @@ export default async function CalendarSyncPage() {
                 <TableRow>
                   <TableHead>Unit</TableHead>
                   <TableHead className="hidden md:table-cell">Owner</TableHead>
-                  <TableHead>Airbnb link</TableHead>
+                  <TableHead>{site} link</TableHead>
                   <TableHead className="hidden sm:table-cell">Last synced</TableHead>
                   <TableHead className="hidden text-right sm:table-cell">Events</TableHead>
                   <TableHead>Status</TableHead>
@@ -127,7 +166,7 @@ export default async function CalendarSyncPage() {
                         {flags > 0 && (
                           <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--warning-foreground)] dark:text-[var(--warning)]">
                             <AlertTriangle className="size-3" />
-                            {flags} Airbnb {flags === 1 ? "stay" : "stays"} without a DET permit
+                            {flags} {site} {flags === 1 ? "stay" : "stays"} without a DET permit
                           </p>
                         )}
                       </TableCell>
@@ -139,16 +178,16 @@ export default async function CalendarSyncPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {u.airbnb_ical_url ? <Badge variant="default">Connected</Badge> : <Badge variant="muted">Not set</Badge>}
+                        {u.url ? <Badge variant="default">Connected</Badge> : <Badge variant="muted">Not set</Badge>}
                       </TableCell>
                       <TableCell className="tabular hidden whitespace-nowrap text-sm sm:table-cell">
-                        {u.ical_last_synced_at ? dubaiTime.format(new Date(u.ical_last_synced_at)) : "—"}
+                        {u.syncedAt ? dubaiTime.format(new Date(u.syncedAt)) : "—"}
                       </TableCell>
-                      <TableCell className="tabular hidden text-right sm:table-cell">{u.ical_last_event_count ?? "—"}</TableCell>
+                      <TableCell className="tabular hidden text-right sm:table-cell">{u.events ?? "—"}</TableCell>
                       <TableCell className="max-w-xs">
-                        {u.airbnb_ical_url ? <SyncStatusBadge status={u.ical_last_status} /> : "—"}
-                        {u.ical_last_status === "error" && u.ical_last_error && (
-                          <p className="mt-1 line-clamp-2 text-xs text-[var(--destructive)]">{u.ical_last_error}</p>
+                        {u.url ? <SyncStatusBadge status={u.status} /> : "—"}
+                        {u.status === "error" && u.error && (
+                          <p className="mt-1 line-clamp-2 text-xs text-[var(--destructive)]">{u.error}</p>
                         )}
                       </TableCell>
                     </TableRow>

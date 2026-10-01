@@ -236,3 +236,86 @@ begin
   delete from units where id = u;
   raise notice 'TEST 47  PASS  holiday-home units are listed, not vacant';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 48 - Booking.com feed: its own stays, blocks and sync status; the
+-- first read is silent and later ones are announced; an Airbnb sync never
+-- cancels a Booking.com stay; no permit -> recorded and flagged.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_unit uuid := (select id from units where unit_number = '2807');
+  r jsonb;
+  b1 uuid;
+  b2 uuid;
+begin
+  update units set booking_ical_url = 'https://admin.booking.com/hotel/hoteladmin/ical.html?t=test' where id = v_unit;
+
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'bdc-1@booking.com', 'start', '2029-08-01', 'end', '2029-08-04', 'kind', 'reservation')), null);
+  assert (r->>'created')::int = 1, 'created: ' || r;
+  select id into b1 from bookings where ical_uid = 'bdc-1@booking.com';
+  assert (select channel from bookings where id = b1) = 'booking_com', 'channel booking_com';
+  assert (select import_source from bookings where id = b1) = 'feed_first_read', 'first read marked';
+  assert not exists (select 1 from notifications where booking_id = b1), 'first read is silent';
+  assert (select imported_without_permit from bookings where id = b1), 'no permit in 2029: flagged, recorded';
+  assert (select booking_ical_last_status from units where id = v_unit) = 'ok', 'own status';
+  assert (select booking_ical_last_event_count from units where id = v_unit) = 1, 'own count';
+
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'bdc-1@booking.com', 'start', '2029-08-01', 'end', '2029-08-04', 'kind', 'reservation'),
+         jsonb_build_object('uid', 'bdc-2@booking.com', 'start', '2029-08-10', 'end', '2029-08-12', 'kind', 'reservation')), null);
+  select id into b2 from bookings where ical_uid = 'bdc-2@booking.com';
+  assert (select import_source from bookings where id = b2) is null, 'later read is a normal import';
+  assert exists (select 1 from notifications where booking_id = b2), 'later reads are announced';
+
+  -- An Airbnb sync (even with no events) leaves Booking.com stays alone.
+  perform apply_airbnb_ical(v_unit, '[]'::jsonb, null);
+  assert (select status from bookings where id = b1) = 'confirmed', 'airbnb sync does not cancel booking.com';
+
+  -- A Booking.com stay gone from its feed is cancelled.
+  r := apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+         jsonb_build_object('uid', 'bdc-1@booking.com', 'start', '2029-08-01', 'end', '2029-08-04', 'kind', 'reservation')), null);
+  assert (select status from bookings where id = b2) = 'cancelled', 'removed from feed: cancelled';
+  assert (select cancellation_reason from bookings where id = b2) = 'Removed from the Booking.com calendar feed', 'reason';
+
+  -- Feed errors land on the Booking.com status only.
+  perform apply_channel_ical(v_unit, 'booking_com', null, 'boom');
+  assert (select booking_ical_last_status from units where id = v_unit) = 'error', 'booking.com error recorded';
+  assert (select coalesce(ical_last_status, 'ok') from units where id = v_unit) <> 'error'
+      or (select ical_last_error from units where id = v_unit) is distinct from 'boom', 'airbnb status untouched';
+
+  delete from bookings where ical_uid like 'bdc-%@booking.com';
+  update units set booking_ical_url = null, booking_ical_last_synced_at = null, booking_ical_last_status = null,
+                   booking_ical_last_error = null, booking_ical_last_event_count = null where id = v_unit;
+  raise notice 'TEST 48  PASS  Booking.com feed: own stays/status, first read silent, channels never cancel each other';
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 49 - a unit with only a Booking.com link: after its first read, new
+-- Booking.com stays are announced (the Airbnb first-read rule no longer
+-- silences them).
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_prop uuid := (select property_id from units where unit_number = '2807');
+  v_unit uuid;
+  b uuid;
+begin
+  insert into units (property_id, unit_number, kind, bedrooms, operating_mode)
+  values (v_prop, 'T-BDC-49', 'apartment', 1, 'short_term')
+  returning id into v_unit;
+  insert into holiday_home_permits (unit_id, permit_number, operator_name, det_classification, issued_on, expires_on, status)
+  values (v_unit, 'DET-TEST-49', 'D|R|P', 'Standard', current_date - 1, current_date + 400, 'active');
+
+  perform apply_channel_ical(v_unit, 'booking_com', '[]'::jsonb, null);           -- first read: nothing yet
+  perform apply_channel_ical(v_unit, 'booking_com', jsonb_build_array(
+    jsonb_build_object('uid', 'bdc-49@booking.com', 'start', current_date + 40, 'end', current_date + 42, 'kind', 'reservation')), null);
+  select id into b from bookings where ical_uid = 'bdc-49@booking.com';
+  assert exists (select 1 from notifications where booking_id = b), 'announced';
+
+  delete from bookings where id = b;
+  delete from holiday_home_permits where permit_number = 'DET-TEST-49';
+  delete from units where id = v_unit;
+  raise notice 'TEST 49  PASS  Booking.com-only unit: new stays announced after the first read';
+end $$;

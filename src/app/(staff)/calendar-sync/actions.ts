@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { syncUnit } from "@/lib/ical/sync";
+import { FEED_CHANNEL_NAME, type FeedChannel } from "@/lib/ical/url";
 import { parseListingRows, type ListingRow } from "@/lib/ical/listings";
 
 export interface ListingResult {
@@ -48,6 +49,12 @@ export async function addAirbnbListings(
     return { errors: ["You do not have permission to add units."] };
   }
 
+  const channel: FeedChannel = formData.get("channel") === "booking_com" ? "booking_com" : "airbnb";
+  const site = FEED_CHANNEL_NAME[channel];
+  const linkColumn = channel === "airbnb" ? "airbnb_ical_url" : "booking_ical_url";
+  const linkOf = (u: { airbnb_ical_url: string | null; booking_ical_url: string | null }) =>
+    channel === "airbnb" ? u.airbnb_ical_url : u.booking_ical_url;
+
   const all = (name: string) => formData.getAll(name).map(String);
   const { rows, errors } = parseListingRows({
     building: all("building"),
@@ -59,7 +66,7 @@ export async function addAirbnbListings(
     weeklyDiscount: all("weeklyDiscount"),
     monthlyDiscount: all("monthlyDiscount"),
     link: all("link"),
-  });
+  }, channel);
   if (errors.length) return { errors };
 
   const supabase = await createClient();
@@ -67,13 +74,13 @@ export async function addAirbnbListings(
   // A link already connected to a unit would import the same stays twice.
   const { data: taken } = await supabase
     .from("units")
-    .select("unit_number, airbnb_ical_url, properties(name)")
-    .in("airbnb_ical_url", rows.map((r) => r.link));
+    .select("unit_number, airbnb_ical_url, booking_ical_url, properties(name)")
+    .in(linkColumn, rows.map((r) => r.link));
   const takenBy = new Map(
-    (taken ?? []).map((u) => [u.airbnb_ical_url, `${u.properties?.name ?? ""} ${u.unit_number}`.trim()])
+    (taken ?? []).map((u) => [linkOf(u), `${u.properties?.name ?? ""} ${u.unit_number}`.trim()])
   );
   const clashes = rows.flatMap((r) =>
-    takenBy.has(r.link) ? [`Row ${r.row}: this Airbnb link is already connected to ${takenBy.get(r.link)}.`] : []
+    takenBy.has(r.link) ? [`Row ${r.row}: this ${site} link is already connected to ${takenBy.get(r.link)}.`] : []
   );
   if (clashes.length) return { errors: clashes };
 
@@ -101,14 +108,14 @@ export async function addAirbnbListings(
   async function addUnit(row: ListingRow, propertyId: string): Promise<Omit<ListingResult, "row" | "label" | "link">> {
     const { data: existing } = await supabase
       .from("units")
-      .select("id, operating_mode, airbnb_ical_url")
+      .select("id, operating_mode, airbnb_ical_url, booking_ical_url")
       .eq("property_id", propertyId)
       .eq("unit_number", row.unitNumber)
       .maybeSingle();
 
     if (existing) {
-      if (existing.airbnb_ical_url) {
-        return { unitId: existing.id, outcome: "failed", message: "This unit already has an Airbnb link." };
+      if (linkOf(existing)) {
+        return { unitId: existing.id, outcome: "failed", message: `This unit already has a ${site} link.` };
       }
       if (existing.operating_mode === "long_term" || existing.operating_mode === "not_operating") {
         return {
@@ -119,13 +126,13 @@ export async function addAirbnbListings(
       }
       const { data, error } = await supabase
         .from("units")
-        .update({ airbnb_ical_url: row.link, ...priceColumns(row) })
+        .update({ [linkColumn]: row.link, ...priceColumns(row) })
         .eq("id", existing.id)
         .select("id");
       if (error || !data?.length) {
         return { unitId: existing.id, outcome: "failed", message: error?.message ?? "You do not have access to this unit." };
       }
-      return { unitId: existing.id, outcome: "linked", message: "Existing unit connected to Airbnb." };
+      return { unitId: existing.id, outcome: "linked", message: `Existing unit connected to ${site}.` };
     }
 
     const { data, error } = await supabase
@@ -137,7 +144,7 @@ export async function addAirbnbListings(
         bedrooms: row.bedrooms,
         furnishing: "fully_furnished",
         operating_mode: "short_term",
-        airbnb_ical_url: row.link,
+        [linkColumn]: row.link,
         ...priceColumns(row),
       })
       .select("id")
@@ -162,11 +169,11 @@ export async function addAirbnbListings(
   for (let i = 0; i < toSync.length; i += SYNC_CONCURRENCY) {
     await Promise.all(
       toSync.slice(i, i + SYNC_CONCURRENCY).map(async (r) => {
-        const sync = await syncUnit(supabase, r.unitId!, r.link);
+        const sync = await syncUnit(supabase, r.unitId!, r.link, channel);
         const stays = sync.created ?? 0;
         r.message +=
           sync.ok || stays
-            ? ` ${stays} Airbnb ${stays === 1 ? "stay" : "stays"} imported.`
+            ? ` ${stays} ${site} ${stays === 1 ? "stay" : "stays"} imported.`
             : ` The first sync failed: ${(sync.errors[0] ?? "unknown error").replace(/\.$/, "")}. It retries every 15 minutes.`;
       })
     );
