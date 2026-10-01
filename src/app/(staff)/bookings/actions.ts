@@ -643,23 +643,25 @@ export async function updateBookingPrice(
 
 export type ImportState = ActionState & {
   updated?: number;
-  /** Past stays added from the file. */
+  /** Stays added from the file. */
   created?: number;
+  /** Of those, stays that have not ended yet. */
+  createdLive?: number;
   notFound?: string[];
   otherCurrency?: string[];
   skipped?: Record<string, number>;
   /** Airbnb stays still without a price whose code was not in the file. */
   stillMissing?: { id: string; code: string; unit: string; checkIn: string }[];
   stillMissingTotal?: number;
-  /** Listings with past stays in the file that no unit is matched to yet. */
+  /** Listings with stays to add in the file that no unit is matched to yet. */
   unmatched?: { listing: string; stays: number }[];
   /** Units to choose from when matching listings. */
   units?: { id: string; label: string }[];
   /** The file's text, carried into the matching step so it need not be chosen again. */
   csvText?: string;
-  /** Past stays left out because the unit already has a stay on those dates. */
+  /** Stays left out because the unit already has a stay on those dates. */
   overlapping?: string[];
-  /** Past stays that could not be saved, with the reason. */
+  /** Stays that could not be saved, with the reason. */
   failed?: string[];
 };
 
@@ -670,10 +672,13 @@ const MAX_CSV = 5_000_000;
  * calendar sync stores in external_booking_id:
  *
  *  - a stay already in the portal gets its price and guest name;
- *  - a stay that ended before its unit was linked (the calendar feed only
- *    carries current and future stays) is added as checked out, on the unit
- *    whose Airbnb listing name matches the file. Listings not matched yet are
- *    returned for staff to match, and the answers are kept on the unit.
+ *  - a stay the portal has never seen is added on the unit whose Airbnb
+ *    listing name matches the file: as checked out if it has ended (the
+ *    calendar feed never carries those), otherwise as confirmed (a unit
+ *    whose calendar is not linked yet). Listings not matched yet are returned
+ *    for staff to match, and the answers are kept on the unit. Stays added
+ *    this way are not announced to anyone (import_source, migration 0022),
+ *    and the calendar sync adopts a confirmed one by its code later.
  *
  * Re-importing the same file sets the same values again and adds nothing
  * twice, so it is safe to repeat.
@@ -730,11 +735,9 @@ export async function importAirbnbEarnings(
 
   const today = dubaiToday();
   const byCode = new Map((bookings ?? []).map((b) => [b.external_booking_id!.toUpperCase(), b]));
-  // Ended stays the portal has never seen: added below rather than reported.
-  const past = reservations.filter(
-    (r) => !byCode.has(r.code) && r.checkIn && r.checkOut && r.checkOut <= today
-  );
-  const pastCodes = new Set(past.map((r) => r.code));
+  // Stays the portal has never seen, with dates: added below rather than reported.
+  const toAdd = reservations.filter((r) => !byCode.has(r.code) && r.checkIn && r.checkOut);
+  const toAddCodes = new Set(toAdd.map((r) => r.code));
   const notFound: string[] = [];
   const otherCurrency: string[] = [];
   let updated = 0;
@@ -742,7 +745,7 @@ export async function importAirbnbEarnings(
   for (const r of reservations) {
     const booking = byCode.get(r.code);
     if (!booking) {
-      if (!pastCodes.has(r.code)) notFound.push(r.code);
+      if (!toAddCodes.has(r.code)) notFound.push(r.code);
       continue;
     }
     // Amounts are kept in AED; a payout in another currency needs a rate.
@@ -772,14 +775,15 @@ export async function importAirbnbEarnings(
     if (changed?.length) updated++;
   }
 
-  // ---- past stays
+  // ---- stays the portal does not have
   let created = 0;
+  let createdLive = 0;
   const overlapping: string[] = [];
   const failed: string[] = [];
   const unmatchedCount = new Map<string, number>();
   let unitOptions: { id: string; label: string }[] = [];
 
-  if (past.length) {
+  if (toAdd.length) {
     const { data: unitRows, error: unitsError } = await supabase
       .from("units")
       .select("id, unit_number, airbnb_listing_name, properties(name)")
@@ -794,7 +798,7 @@ export async function importAirbnbEarnings(
       .map((u) => ({ id: u.id, label: `${u.properties?.name ?? ""} · ${u.unit_number}` }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
-    for (const r of past) {
+    for (const r of toAdd) {
       if (r.currency && r.currency !== "AED") {
         otherCurrency.push(`${r.code} (${r.currency})`);
         continue;
@@ -830,22 +834,27 @@ export async function importAirbnbEarnings(
         guestId = guest?.id ?? null;
       }
 
+      const ended = r.checkOut! <= today;
       const { error: insertError } = await supabase.from("bookings").insert({
         booking_number: "", // set by the autonumber trigger
         unit_id: unitId,
         channel: "airbnb",
-        status: "checked_out",
+        status: ended ? "checked_out" : "confirmed",
+        import_source: "earnings_csv",
         check_in: r.checkIn!,
         check_out: r.checkOut!,
         adults: 1,
         guest_count_known: false,
         external_booking_id: r.code,
         guest_id: guestId,
-        internal_notes: "Past stay, added from Airbnb's earnings export.",
+        internal_notes: "Added from Airbnb's earnings export.",
         ...earningsToBookingAmounts(r, nightsBetween(r.checkIn!, r.checkOut!)),
       });
       if (insertError) failed.push(`${r.code}: ${explain(insertError)}`);
-      else created++;
+      else {
+        created++;
+        if (!ended) createdLive++;
+      }
     }
   }
 
@@ -872,12 +881,15 @@ export async function importAirbnbEarnings(
   return {
     success: [
       `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
-      created ? `${created} past ${created === 1 ? "stay" : "stays"} added.` : "",
+      created
+        ? `${created} ${created === 1 ? "stay" : "stays"} added (${created - createdLive} past, ${createdLive} current or upcoming).`
+        : "",
     ]
       .filter(Boolean)
       .join(" "),
     updated,
     created,
+    createdLive,
     notFound,
     otherCurrency,
     skipped,

@@ -252,6 +252,7 @@ export type Database = {
           ical_uid: string | null;
           imported_without_permit: boolean;
           last_seen_in_feed_at: string | null;
+          import_source: string | null;
         };
         Insert: {
           id?: string;
@@ -292,6 +293,7 @@ export type Database = {
           ical_uid?: string | null;
           imported_without_permit?: boolean;
           last_seen_in_feed_at?: string | null;
+          import_source?: string | null;
         };
         Update: {
           id?: string;
@@ -332,6 +334,7 @@ export type Database = {
           ical_uid?: string | null;
           imported_without_permit?: boolean;
           last_seen_in_feed_at?: string | null;
+          import_source?: string | null;
         };
         Relationships: [
           {
@@ -509,6 +512,7 @@ export type Database = {
           created_at: string;
           updated_at: string;
           show_guest_first_name_to_owners: boolean;
+          email_owners_about_bookings: boolean;
         };
         Insert: {
           id?: boolean;
@@ -548,6 +552,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           show_guest_first_name_to_owners?: boolean;
+          email_owners_about_bookings?: boolean;
         };
         Update: {
           id?: boolean;
@@ -587,6 +592,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           show_guest_first_name_to_owners?: boolean;
+          email_owners_about_bookings?: boolean;
         };
         Relationships: [];
       };
