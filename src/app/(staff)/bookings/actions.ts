@@ -643,18 +643,40 @@ export async function updateBookingPrice(
 
 export type ImportState = ActionState & {
   updated?: number;
+  /** Past stays added from the file. */
+  created?: number;
   notFound?: string[];
   otherCurrency?: string[];
   skipped?: Record<string, number>;
   /** Airbnb stays still without a price whose code was not in the file. */
   stillMissing?: { id: string; code: string; unit: string; checkIn: string }[];
   stillMissingTotal?: number;
+  /** Listings with past stays in the file that no unit is matched to yet. */
+  unmatched?: { listing: string; stays: number }[];
+  /** Units to choose from when matching listings. */
+  units?: { id: string; label: string }[];
+  /** The file's text, carried into the matching step so it need not be chosen again. */
+  csvText?: string;
+  /** Past stays left out because the unit already has a stay on those dates. */
+  overlapping?: string[];
+  /** Past stays that could not be saved, with the reason. */
+  failed?: string[];
 };
 
+const MAX_CSV = 5_000_000;
+
 /**
- * Airbnb's earnings export -> booking prices, matched on the confirmation
- * code the calendar sync stores in external_booking_id. Re-importing the same
- * file sets the same values again, so it is safe to repeat.
+ * Airbnb's earnings export -> bookings, matched on the confirmation code the
+ * calendar sync stores in external_booking_id:
+ *
+ *  - a stay already in the portal gets its price and guest name;
+ *  - a stay that ended before its unit was linked (the calendar feed only
+ *    carries current and future stays) is added as checked out, on the unit
+ *    whose Airbnb listing name matches the file. Listings not matched yet are
+ *    returned for staff to match, and the answers are kept on the unit.
+ *
+ * Re-importing the same file sets the same values again and adds nothing
+ * twice, so it is safe to repeat.
  */
 export async function importAirbnbEarnings(
   _prev: ImportState,
@@ -665,17 +687,40 @@ export async function importAirbnbEarnings(
     return { error: "You do not have permission to import earnings." };
   }
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file first." };
-  if (file.size > 5_000_000) return { error: "That file is too large for an earnings export." };
+  let text: string;
+  const carried = formData.get("csvText");
+  if (typeof carried === "string" && carried) {
+    if (carried.length > MAX_CSV) return { error: "That file is too large for an earnings export." };
+    text = carried;
+  } else {
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) return { error: "Choose the CSV file first." };
+    if (file.size > MAX_CSV) return { error: "That file is too large for an earnings export." };
+    text = await file.text();
+  }
 
-  const { reservations, skipped, errors } = parseAirbnbEarnings(await file.text());
+  const { reservations, skipped, errors } = parseAirbnbEarnings(text);
   if (errors.length) return { error: errors[0] };
   if (reservations.length === 0) {
     return { error: "No reservations found in this file.", skipped };
   }
 
   const supabase = await createClient();
+
+  // Answers from the matching step: Airbnb listing name -> unit.
+  const matchListings = formData.getAll("matchListing").map(String);
+  const matchUnits = formData.getAll("matchUnit").map(String);
+  for (let i = 0; i < matchListings.length; i++) {
+    const listing = matchListings[i].trim();
+    const unitId = matchUnits[i] ?? "";
+    if (!listing || !z.string().uuid().safeParse(unitId).success) continue;
+    const { error: matchError } = await supabase
+      .from("units")
+      .update({ airbnb_listing_name: listing })
+      .eq("id", unitId);
+    if (matchError) return { error: `Could not save the match for "${listing}": ${matchError.message}` };
+  }
+
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select("id, external_booking_id, check_in, check_out, guest_id")
@@ -683,7 +728,13 @@ export async function importAirbnbEarnings(
     .in("external_booking_id", reservations.map((r) => r.code));
   if (error) return { error: error.message };
 
+  const today = dubaiToday();
   const byCode = new Map((bookings ?? []).map((b) => [b.external_booking_id!.toUpperCase(), b]));
+  // Ended stays the portal has never seen: added below rather than reported.
+  const past = reservations.filter(
+    (r) => !byCode.has(r.code) && r.checkIn && r.checkOut && r.checkOut <= today
+  );
+  const pastCodes = new Set(past.map((r) => r.code));
   const notFound: string[] = [];
   const otherCurrency: string[] = [];
   let updated = 0;
@@ -691,7 +742,7 @@ export async function importAirbnbEarnings(
   for (const r of reservations) {
     const booking = byCode.get(r.code);
     if (!booking) {
-      notFound.push(r.code);
+      if (!pastCodes.has(r.code)) notFound.push(r.code);
       continue;
     }
     // Amounts are kept in AED; a payout in another currency needs a rate.
@@ -721,6 +772,83 @@ export async function importAirbnbEarnings(
     if (changed?.length) updated++;
   }
 
+  // ---- past stays
+  let created = 0;
+  const overlapping: string[] = [];
+  const failed: string[] = [];
+  const unmatchedCount = new Map<string, number>();
+  let unitOptions: { id: string; label: string }[] = [];
+
+  if (past.length) {
+    const { data: unitRows, error: unitsError } = await supabase
+      .from("units")
+      .select("id, unit_number, airbnb_listing_name, properties(name)")
+      .eq("is_active", true);
+    if (unitsError) return { error: unitsError.message };
+    const unitByListing = new Map(
+      (unitRows ?? [])
+        .filter((u) => u.airbnb_listing_name)
+        .map((u) => [u.airbnb_listing_name!.trim().toLowerCase(), u.id])
+    );
+    unitOptions = (unitRows ?? [])
+      .map((u) => ({ id: u.id, label: `${u.properties?.name ?? ""} · ${u.unit_number}` }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    for (const r of past) {
+      if (r.currency && r.currency !== "AED") {
+        otherCurrency.push(`${r.code} (${r.currency})`);
+        continue;
+      }
+      const unitId = r.listing ? unitByListing.get(r.listing.toLowerCase()) : undefined;
+      if (!unitId) {
+        if (r.listing) unmatchedCount.set(r.listing, (unmatchedCount.get(r.listing) ?? 0) + 1);
+        else notFound.push(r.code);
+        continue;
+      }
+
+      // The same stay entered by hand (or under another code): leave it.
+      const { data: clash } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("unit_id", unitId)
+        .not("status", "in", "(cancelled,no_show)")
+        .lt("check_in", r.checkOut!)
+        .gt("check_out", r.checkIn!)
+        .limit(1);
+      if (clash?.length) {
+        overlapping.push(r.code);
+        continue;
+      }
+
+      let guestId: string | null = null;
+      if (r.guest) {
+        const { data: guest } = await supabase
+          .from("guests")
+          .insert({ full_name: r.guest })
+          .select("id")
+          .single();
+        guestId = guest?.id ?? null;
+      }
+
+      const { error: insertError } = await supabase.from("bookings").insert({
+        booking_number: "", // set by the autonumber trigger
+        unit_id: unitId,
+        channel: "airbnb",
+        status: "checked_out",
+        check_in: r.checkIn!,
+        check_out: r.checkOut!,
+        adults: 1,
+        guest_count_known: false,
+        external_booking_id: r.code,
+        guest_id: guestId,
+        internal_notes: "Past stay, added from Airbnb's earnings export.",
+        ...earningsToBookingAmounts(r, nightsBetween(r.checkIn!, r.checkOut!)),
+      });
+      if (insertError) failed.push(`${r.code}: ${explain(insertError)}`);
+      else created++;
+    }
+  }
+
   // Stays the file did not cover: usually the other Airbnb tab (Paid or
   // Upcoming) or a date range that ends too early.
   const inFile = new Set(reservations.map((r) => r.code));
@@ -736,13 +864,25 @@ export async function importAirbnbEarnings(
     (b) => !b.external_booking_id || !inFile.has(b.external_booking_id.toUpperCase())
   );
 
+  const unmatched = [...unmatchedCount]
+    .map(([listing, stays]) => ({ listing, stays }))
+    .sort((a, b) => a.listing.localeCompare(b.listing));
+
   revalidatePath("/bookings");
   return {
-    success: `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
+    success: [
+      `${updated} Airbnb ${updated === 1 ? "booking" : "bookings"} priced.`,
+      created ? `${created} past ${created === 1 ? "stay" : "stays"} added.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     updated,
+    created,
     notFound,
     otherCurrency,
     skipped,
+    overlapping,
+    failed,
     stillMissing: missing.slice(0, 30).map((b) => ({
       id: b.id,
       code: b.external_booking_id ?? "no code",
@@ -750,5 +890,18 @@ export async function importAirbnbEarnings(
       checkIn: b.check_in,
     })),
     stillMissingTotal: missing.length,
+    ...(unmatched.length ? { unmatched, units: unitOptions, csvText: text } : {}),
   };
+}
+
+/** Forgets a unit's Airbnb listing match, so the next import asks again. */
+export async function clearListingMatch(unitId: string): Promise<ActionState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "bookings.manage")) return { error: "You do not have permission to do that." };
+  if (!z.string().uuid().safeParse(unitId).success) return { error: "Unit not found." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("units").update({ airbnb_listing_name: null }).eq("id", unitId);
+  if (error) return { error: error.message };
+  revalidatePath("/bookings/import");
+  return { success: "Match removed." };
 }

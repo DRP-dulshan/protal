@@ -29,6 +29,11 @@ export interface AirbnbEarnings {
   /** Taxes Airbnb collected from the guest (Dubai: Tourism Dirham). */
   occupancyTaxes: number;
   rows: number;
+  /** The listing's title, as Airbnb names it in the file. */
+  listing: string | null;
+  /** Stay dates (ISO), when the file has them. checkOut is the departure day. */
+  checkIn: string | null;
+  checkOut: string | null;
 }
 
 export interface EarningsParseResult {
@@ -91,7 +96,41 @@ const COLUMNS = {
   cleaningFee: ["cleaningfee"],
   grossEarnings: ["grossearnings"],
   occupancyTaxes: ["occupancytaxes", "occupancytax", "taxes"],
+  listing: ["listing", "listingname", "listingtitle"],
+  startDate: ["startdate", "checkin", "checkindate"],
+  endDate: ["enddate", "checkout", "checkoutdate"],
+  nights: ["nights"],
 } as const;
+
+/**
+ * Airbnb writes dates as MM/DD/YYYY, but a file opened and re-saved in Excel
+ * can come back as DD/MM/YYYY or YYYY-MM-DD. A file is read one way
+ * throughout: day-first only if some date cannot be month-first.
+ */
+function dateReader(samples: string[]): (value: string) => string | null {
+  const dayFirst = samples.some((v) => {
+    const m = v.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+    return m !== null && Number(m[1]) > 12;
+  });
+  return (value) => {
+    const v = value.trim();
+    let y: number, mo: number, d: number;
+    const iso = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const dmy = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+    if (iso) [y, mo, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+    else if (dmy) {
+      const [a, b] = [Number(dmy[1]), Number(dmy[2])];
+      [mo, d] = dayFirst ? [b, a] : [a, b];
+      y = Number(dmy[3]) < 100 ? 2000 + Number(dmy[3]) : Number(dmy[3]);
+    } else return null;
+    const date = new Date(Date.UTC(y, mo - 1, d));
+    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+    return date.toISOString().slice(0, 10);
+  };
+}
+
+const addDaysIso = (iso: string, days: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 /** "1,234.56", "(12.00)", "-12" and "" as numbers. */
 export function parseAmount(value: string | undefined): number {
@@ -133,6 +172,9 @@ export function parseAirbnbEarnings(text: string): EarningsParseResult {
   }
 
   const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
+  const readDate = dateReader(
+    rows.slice(1).flatMap((r) => [cell(r, col.startDate), cell(r, col.endDate)]).filter(Boolean)
+  );
   const byCode = new Map<string, AirbnbEarnings>();
   const skipped: Record<string, number> = {};
 
@@ -144,11 +186,20 @@ export function parseAirbnbEarnings(text: string): EarningsParseResult {
       continue;
     }
 
+    const checkIn = readDate(cell(r, col.startDate));
+    const nights = Number(cell(r, col.nights));
+    const checkOut =
+      readDate(cell(r, col.endDate)) ??
+      (checkIn && Number.isInteger(nights) && nights > 0 ? addDaysIso(checkIn, nights) : null);
+
     const entry =
       byCode.get(code) ??
       ({
         code,
         guest: cell(r, col.guest) || null,
+        listing: cell(r, col.listing).replace(/\s+/g, " ") || null,
+        checkIn,
+        checkOut: checkIn && checkOut && checkOut > checkIn ? checkOut : null,
         currency: cell(r, col.currency).toUpperCase() || null,
         amount: 0,
         serviceFee: 0,

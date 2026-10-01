@@ -89,3 +89,38 @@ test("a file that is not the earnings export is refused with a hint", () => {
   assert.equal(reservations.length, 0);
   assert.match(errors[0], /Transaction history/);
 });
+
+test("stay dates and listing: Airbnb's MM/DD/YYYY, end date is the check-out day", () => {
+  const { reservations } = parseAirbnbEarnings(EXPORT);
+  const r = reservations.find((x) => x.code === "HMABCDE123")!;
+  assert.equal(r.listing, "Marina Gate 1 - 2807");
+  assert.equal(r.checkIn, "2026-10-10");
+  assert.equal(r.checkOut, "2026-10-15");
+});
+
+test("a re-saved file with DD/MM/YYYY dates, or only start date and nights", () => {
+  const dayFirst = [
+    "Type,Confirmation code,Start date,End date,Nights,Listing,Amount",
+    'Reservation,HMDAYFIRST,25/03/2025,02/04/2025,8,"Sea View  Studio",900',
+    "Reservation,HMDAYFIR2,03/04/2025,05/04/2025,2,Sea View Studio,200",
+  ].join("\n");
+  const a = parseAirbnbEarnings(dayFirst).reservations;
+  assert.deepEqual(
+    a.map((r) => [r.code, r.checkIn, r.checkOut, r.listing]),
+    [
+      ["HMDAYFIRST", "2025-03-25", "2025-04-02", "Sea View Studio"],
+      ["HMDAYFIR2", "2025-04-03", "2025-04-05", "Sea View Studio"],
+    ]
+  );
+
+  const noEnd = ["Type,Confirmation code,Start date,Nights,Amount", "Reservation,HMNOEND001,2025-12-30,4,500"].join("\n");
+  const b = parseAirbnbEarnings(noEnd).reservations[0];
+  assert.equal(b.checkIn, "2025-12-30");
+  assert.equal(b.checkOut, "2026-01-03", "start + nights, across the year end");
+
+  const none = ["Type,Confirmation code,Amount", "Reservation,HMNODATES1,500"].join("\n");
+  const c = parseAirbnbEarnings(none).reservations[0];
+  assert.equal(c.checkIn, null);
+  assert.equal(c.checkOut, null);
+  assert.equal(c.listing, null);
+});
