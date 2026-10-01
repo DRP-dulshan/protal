@@ -121,6 +121,16 @@
     border-color: var(--border);
   }
 
+  /*
+   * A grid or flex item will not shrink below its content's width by
+   * default, so one wide table inside a card pushed the whole page sideways
+   * on a phone. Letting grid items shrink keeps wide content scrolling
+   * inside its own container (Table already does).
+   */
+  .grid > * {
+    min-width: 0;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);

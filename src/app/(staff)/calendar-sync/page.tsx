@@ -110,8 +110,8 @@ export default async function CalendarSyncPage() {
                   <TableHead>Unit</TableHead>
                   <TableHead className="hidden md:table-cell">Owner</TableHead>
                   <TableHead>Airbnb link</TableHead>
-                  <TableHead>Last synced</TableHead>
-                  <TableHead className="text-right">Events</TableHead>
+                  <TableHead className="hidden sm:table-cell">Last synced</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Events</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -141,10 +141,10 @@ export default async function CalendarSyncPage() {
                       <TableCell>
                         {u.airbnb_ical_url ? <Badge variant="default">Connected</Badge> : <Badge variant="muted">Not set</Badge>}
                       </TableCell>
-                      <TableCell className="tabular whitespace-nowrap text-sm">
+                      <TableCell className="tabular hidden whitespace-nowrap text-sm sm:table-cell">
                         {u.ical_last_synced_at ? dubaiTime.format(new Date(u.ical_last_synced_at)) : "—"}
                       </TableCell>
-                      <TableCell className="tabular text-right">{u.ical_last_event_count ?? "—"}</TableCell>
+                      <TableCell className="tabular hidden text-right sm:table-cell">{u.ical_last_event_count ?? "—"}</TableCell>
                       <TableCell className="max-w-xs">
                         {u.airbnb_ical_url ? <SyncStatusBadge status={u.ical_last_status} /> : "—"}
                         {u.ical_last_status === "error" && u.ical_last_error && (
