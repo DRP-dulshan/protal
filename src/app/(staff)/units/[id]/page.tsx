@@ -41,7 +41,7 @@ import { UNIT_KIND, FURNISHING, COMPLIANCE_KIND } from "@/lib/labels";
 import { RecordActions } from "@/components/domain/record-actions";
 import { archiveUnit, deleteUnit, restoreUnit } from "../actions";
 import { PermitDialog } from "./permit-dialog";
-import { BlockDatesDialog, RemoveBlockButton } from "./block-dates";
+import { BlockDatesDialog, BlockNoteDialog, RemoveBlockButton } from "./block-dates";
 import { ChannelSync } from "./channel-sync";
 import { env } from "@/lib/env";
 import { BookingCalendar } from "@/components/domain/booking-calendar";
@@ -182,7 +182,9 @@ export default async function UnitDetailPage({
   const holds = blocksResult.data ?? [];
   const today = dubaiToday();
   // Airbnb's own "not available" periods are managed by the sync, not by hand.
-  const upcomingHolds = holds.filter((h) => h.end_date > today && h.reason !== "channel_sync");
+  // The sync's own placeholder ("Not available on Airbnb") is not a note.
+  const noteOf = (note: string | null) => (note && !/^Not available on /.test(note) ? note : null);
+  const upcomingHolds = holds.filter((h) => h.end_date > today);
 
   const activeLease = leases.find(
     (l) => l.status === "active" || l.status === "expiring"
@@ -550,6 +552,7 @@ export default async function UnitDetailPage({
                     start: h.start_date,
                     end: h.end_date,
                     reason: h.reason,
+                    note: noteOf(h.note),
                   }))}
                   monthHref={(m) => `/units/${unit.id}?tab=calendar&month=${m}`}
                 />
@@ -563,7 +566,7 @@ export default async function UnitDetailPage({
               <CardContent>
                 {upcomingHolds.length === 0 ? (
                   <p className="text-sm text-[var(--muted-foreground)]">
-                    No upcoming owner stays, maintenance or other blocks.
+                    No upcoming owner stays, maintenance, Airbnb blocks or other blocks.
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -578,17 +581,28 @@ export default async function UnitDetailPage({
                               ? "Owner stay"
                               : h.reason === "maintenance"
                                 ? "Maintenance"
-                                : "Blocked"}
+                                : h.reason === "channel_sync"
+                                  ? "Blocked on Airbnb"
+                                  : "Blocked"}
                           </span>
                           <span className="tabular ml-2 text-[var(--muted-foreground)]">
                             {formatDate(h.start_date)} → {formatDate(h.end_date)}
                           </span>
-                          {h.note && (
-                            <p className="truncate text-xs text-[var(--muted-foreground)]">{h.note}</p>
+                          {noteOf(h.note) && (
+                            <p className="whitespace-pre-line text-xs text-[var(--muted-foreground)]">{noteOf(h.note)}</p>
                           )}
                         </div>
                         {can(profile.role, "bookings.manage") && (
-                          <RemoveBlockButton blockId={h.id} unitId={unit.id} />
+                          <div className="flex shrink-0 items-center">
+                            <BlockNoteDialog
+                              blockId={h.id}
+                              unitId={unit.id}
+                              note={noteOf(h.note)}
+                              label={`${h.reason === "channel_sync" ? "Blocked on Airbnb" : "Block"}, ${formatDate(h.start_date)} → ${formatDate(h.end_date)}`}
+                            />
+                            {/* An Airbnb block comes back with the next sync: remove it on Airbnb. */}
+                            {h.reason !== "channel_sync" && <RemoveBlockButton blockId={h.id} unitId={unit.id} />}
+                          </div>
                         )}
                       </li>
                     ))}

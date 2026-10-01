@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { CalendarX2, X } from "lucide-react";
+import { CalendarX2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormError, SelectField, TextField } from "@/components/domain/form";
-import { blockDates, removeBlock, type ActionState } from "../../bookings/actions";
+import { blockDates, removeBlock, updateBlockNote, type ActionState } from "../../bookings/actions";
 
 const REASONS = [
   { value: "owner_stay", label: "Owner stay" },
@@ -107,5 +107,59 @@ export function RemoveBlockButton({ blockId, unitId }: { blockId: string; unitId
     >
       <X className="size-4" />
     </Button>
+  );
+}
+
+/** Adds or edits the note on one block (Airbnb's own notes do not come through its calendar feed). */
+export function BlockNoteDialog({
+  blockId,
+  unitId,
+  note,
+  label,
+}: {
+  blockId: string;
+  unitId: string;
+  note: string | null;
+  label: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [state, action] = useActionState<ActionState, FormData>(updateBlockNote, {});
+
+  React.useEffect(() => {
+    if (state.success) {
+      toast.success(state.success);
+      setOpen(false);
+    }
+  }, [state]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="ghost" aria-label={note ? "Edit note" : "Add note"}>
+          <Pencil className="size-4" />
+          <span className="hidden sm:inline">{note ? "Edit note" : "Add note"}</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form action={action}>
+          <DialogHeader>
+            <DialogTitle>{note ? "Edit note" : "Add a note"}</DialogTitle>
+            <DialogDescription>
+              {label}. Shown on the unit&apos;s calendar for staff. Airbnb&apos;s own calendar notes do not
+              come through its calendar link, so copy them here; the sync keeps this note.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-4 space-y-3">
+            <FormError message={state.error} />
+            <input type="hidden" name="blockId" value={blockId} />
+            <input type="hidden" name="unitId" value={unitId} />
+            <TextField name="note" label="Note" defaultValue={note ?? ""} placeholder="Long stay - guest pays directly" />
+          </div>
+          <DialogFooter>
+            <Submit label="Save note" pending="Saving…" />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
