@@ -184,6 +184,29 @@ export function SettingsForm({ settings }: { settings: Tables<"company_settings"
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Owner notifications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="emailOwnersAboutBookings"
+              defaultChecked={settings.email_owners_about_bookings}
+              className="mt-0.5 size-4"
+            />
+            <span>
+              <span className="font-medium">Email owners about their bookings</span>
+              <span className="block text-xs text-[var(--muted-foreground)]">
+                New, moved and cancelled stays. Off: owners see these only in their portal, and
+                nothing is emailed to them. The office email is sent either way.
+              </span>
+            </span>
+          </label>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end">
         <Save />
       </div>

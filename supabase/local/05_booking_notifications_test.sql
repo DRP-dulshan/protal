@@ -13,6 +13,10 @@
 \set QUIET on
 set client_min_messages = notice;
 
+-- These suites check what the owner emails say, so they are switched on
+-- here; 07 checks the default (off).
+update company_settings set email_owners_about_bookings = true where id;
+
 create or replace function pg_temp.unit(num text) returns uuid
 language sql as $$ select id from units where unit_number = num $$;
 

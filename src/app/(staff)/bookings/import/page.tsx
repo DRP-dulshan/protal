@@ -21,7 +21,7 @@ export default async function ImportAirbnbEarningsPage() {
       <PageHeader
         breadcrumb={[{ label: "Bookings", href: "/bookings" }]}
         title="Import Airbnb earnings"
-        description="Prices every Airbnb stay in the file at once, and adds past stays the calendar never had."
+        description="Prices every Airbnb stay in the file, and adds the stays the portal does not have yet."
       />
 
       <Card className="mb-5">
@@ -41,11 +41,11 @@ export default async function ImportAirbnbEarningsPage() {
             never see these amounts.
           </p>
           <p className="text-[var(--muted-foreground)]">
-            <span className="font-medium text-[var(--foreground)]">Past stays:</span> the Airbnb
-            calendar only brings current and future stays. Stays that already ended are added from
-            this file as checked out, so they show in Bookings and in the owner&apos;s portal. To
-            bring in older history, export the Paid tab with an earlier start date. The first time
-            a listing appears you choose its unit.
+            <span className="font-medium text-[var(--foreground)]">Stays not in the portal</span>{" "}
+            are added from this file: past, current and upcoming. Ended stays come in as checked
+            out, the rest as confirmed, and they show in Bookings and in the owner&apos;s portal.
+            Nobody is notified about stays added this way. For older history, export the Paid tab
+            with an earlier start date. The first time a listing appears you choose its unit.
           </p>
         </CardContent>
       </Card>

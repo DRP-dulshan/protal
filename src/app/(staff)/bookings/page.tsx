@@ -27,6 +27,9 @@ export const metadata = { title: "Bookings" };
 
 const VIEWS = {
   upcoming: "Upcoming and in-house",
+  arriving: "Arriving today",
+  departing: "Departing today",
+  in_house: "In house now",
   past: "Past stays",
   cancelled: "Cancelled and no-shows",
   needs_price: "Needs a price",
@@ -56,6 +59,17 @@ export default async function BookingsPage({
 
   if (view === "upcoming") {
     query = query.in("status", [...LIVE]).gte("check_out", today).order("check_in");
+  } else if (view === "arriving") {
+    // The same rules as the cards above.
+    query = query.eq("status", "confirmed").eq("check_in", today).order("check_in");
+  } else if (view === "departing") {
+    query = query.in("status", ["confirmed", "checked_in"]).eq("check_out", today).order("check_in");
+  } else if (view === "in_house") {
+    query = query
+      .in("status", ["confirmed", "checked_in"])
+      .gt("check_out", today)
+      .or(`check_in.lt.${today},and(check_in.eq.${today},status.eq.checked_in)`)
+      .order("check_out");
   } else if (view === "past") {
     query = query
       .in("status", ["checked_out", "checked_in", "confirmed"])
@@ -155,9 +169,24 @@ export default async function BookingsPage({
       />
 
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <StatCard label="Arriving today" value={arriving} icon={<LogIn className="size-4" />} />
-        <StatCard label="Departing today" value={departing} icon={<LogOut className="size-4" />} />
-        <StatCard label="In house" value={inHouse} icon={<BedDouble className="size-4" />} />
+        <StatCard
+          label="Arriving today"
+          value={arriving}
+          icon={<LogIn className="size-4" />}
+          href="/bookings?view=arriving"
+        />
+        <StatCard
+          label="Departing today"
+          value={departing}
+          icon={<LogOut className="size-4" />}
+          href="/bookings?view=departing"
+        />
+        <StatCard
+          label="In house"
+          value={inHouse}
+          icon={<BedDouble className="size-4" />}
+          href="/bookings?view=in_house"
+        />
       </div>
 
       {unpriced > 0 && view !== "needs_price" && (
@@ -204,7 +233,7 @@ export default async function BookingsPage({
                 </option>
               ))}
             </Select>
-            <Select name="view" defaultValue={view} className="sm:w-52">
+            <Select key={view} name="view" defaultValue={view} className="sm:w-52">
               {Object.entries(VIEWS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}

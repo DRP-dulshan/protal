@@ -41,8 +41,9 @@ function MatchListings({
       <CardHeader>
         <CardTitle className="text-base">Match Airbnb listings to units</CardTitle>
         <p className="text-sm text-[var(--muted-foreground)]">
-          The file has past stays for these listings. Choose the unit each one is, and those stays
-          are added. This is asked once per listing; leave one blank to skip it for now.
+          The file has stays for these listings that are not in the portal. Choose the unit each
+          one is, and those stays are added. This is asked once per listing; leave one blank to
+          skip it for now.
         </p>
       </CardHeader>
       <CardContent>
@@ -53,7 +54,7 @@ function MatchListings({
               <div className="text-sm">
                 <p className="font-medium">{m.listing}</p>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  {m.stays} past {m.stays === 1 ? "stay" : "stays"}
+                  {m.stays} {m.stays === 1 ? "stay" : "stays"} to add
                 </p>
               </div>
               <input type="hidden" name="matchListing" value={m.listing} />
@@ -111,9 +112,8 @@ export function ImportForm() {
             )}
             {(state.notFound?.length ?? 0) > 0 && (
               <li>
-                Not in the portal yet ({state.notFound!.length}): {state.notFound!.join(", ")}. These
-                stays have not ended yet and have not come in from the Airbnb calendar, or their unit
-                has no calendar link. Sync the calendar and import the file again.
+                Not added ({state.notFound!.length}): {state.notFound!.join(", ")}. The file has no
+                dates or listing name for these.
               </li>
             )}
             {(state.otherCurrency?.length ?? 0) > 0 && (

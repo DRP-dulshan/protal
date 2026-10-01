@@ -28,6 +28,8 @@ const schema = z.object({
   ejariOccupantUpdateDays: z.coerce.number().int().min(1).max(365),
   permitRenewalReminderDays: z.coerce.number().int().min(1).max(365),
   maintenanceThreshold: z.coerce.number().min(0),
+  // A checkbox: present when ticked.
+  emailOwnersAboutBookings: z.literal("on").optional(),
 });
 
 export async function updateCompanySettings(
@@ -65,6 +67,7 @@ export async function updateCompanySettings(
       ejari_occupant_update_days: input.ejariOccupantUpdateDays,
       permit_renewal_reminder_days: input.permitRenewalReminderDays,
       maintenance_owner_approval_threshold: input.maintenanceThreshold,
+      email_owners_about_bookings: input.emailOwnersAboutBookings === "on",
     })
     .eq("id", true);
 
