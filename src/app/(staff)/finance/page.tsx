@@ -50,7 +50,11 @@ export default async function FinancePage({
     query = query.eq("direction", params.direction);
   }
 
-  const [, { data, error }] = await Promise.all([requireCapability("finance.view"), query]);
+  await requireCapability("finance.view");
+  // Stays that have ended post their payout here first (migration 0023):
+  // their status never changes on its own, so this is not left to a trigger.
+  await supabase.rpc("post_completed_bookings");
+  const { data, error } = await query;
   const entries = data ?? [];
 
   const income = entries
@@ -161,7 +165,7 @@ export default async function FinancePage({
       ) : entries.length === 0 ? (
         <EmptyState
           title="No entries in this period"
-          description="Income is posted automatically when a rent cheque clears or a booking completes. Expenses can be recorded against a unit."
+          description="Income is posted automatically when a rent cheque clears, and when a holiday-home stay ends (its payout, once the stay has a price). Expenses can be recorded against a unit."
           icon={<Receipt className="size-8" />}
         />
       ) : (

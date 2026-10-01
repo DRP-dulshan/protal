@@ -192,7 +192,7 @@ export default async function UnitsPage({
                 <TableHead className="hidden lg:table-cell">Mode</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden xl:table-cell">Compliance</TableHead>
-                <TableHead className="text-right">Rent / night</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Rent / night</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -244,7 +244,7 @@ export default async function UnitsPage({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="hidden text-right sm:table-cell">
                     {unit.annual_rent_aed ? (
                       <Money amount={unit.annual_rent_aed} compact />
                     ) : unit.base_nightly_rate_aed ? (

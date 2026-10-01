@@ -43,6 +43,9 @@ export async function generateStatement(
   }
 
   const supabase = await createClient();
+  // Every ended stay's income must be in the ledger before the statement is cut.
+  const { error: postError } = await supabase.rpc("post_completed_bookings");
+  if (postError) return { error: postError.message };
   const { data, error } = await supabase.rpc("generate_owner_statement", {
     p_owner_id: input.ownerId,
     p_period_start: input.periodStart,

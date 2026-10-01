@@ -39,6 +39,8 @@ async function handle(request: NextRequest) {
     // New imports queue booking emails; send them, plus anything a staff
     // action queued that was not sent at the time.
     const emails = await sendQueuedEmails(client);
+    // Stays that ended since the last run post their income (migration 0023).
+    const { data: posted } = await client.rpc("post_completed_bookings");
     const failed = results.filter((r) => !r.ok);
     return NextResponse.json({
       ok: failed.length === 0,
@@ -47,6 +49,7 @@ async function handle(request: NextRequest) {
       created: results.reduce((n, r) => n + (r.created ?? 0), 0),
       cancelled: results.reduce((n, r) => n + (r.cancelled ?? 0), 0),
       emails,
+      ledgerPosted: posted ?? 0,
       ms: Date.now() - started,
       errors: failed.map((r) => ({ unitId: r.unitId, errors: r.errors.slice(0, 3) })),
     });

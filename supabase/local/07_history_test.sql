@@ -131,3 +131,75 @@ begin
 
   raise notice 'TEST 45  PASS  owner booking emails off by default; portal notice and office email unaffected';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 46 - ended, priced stays post their payout to the ledger once;
+-- corrections follow until a statement includes the line; cancelled or
+-- unpriced stays and future stays post nothing; owners cannot post.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_unit uuid := (select id from units where unit_number = '2807');
+  ended uuid;
+  unpriced uuid;
+  n integer;
+  line record;
+  st uuid;
+begin
+  insert into bookings (booking_number, unit_id, channel, status, import_source, check_in, check_out,
+                        adults, external_booking_id, accommodation_aed, gross_total_aed, payout_expected_aed)
+  values ('', v_unit, 'airbnb', 'checked_out', 'earnings_csv', '2021-05-01', '2021-05-04', 1,
+          'HMLEDGER001', 1500, 1634, 1368.07)
+  returning id into ended;
+  insert into bookings (booking_number, unit_id, channel, status, import_source, check_in, check_out,
+                        adults, external_booking_id)
+  values ('', v_unit, 'airbnb', 'checked_out', 'earnings_csv', '2021-06-01', '2021-06-03', 1, 'HMLEDGER002')
+  returning id into unpriced;
+
+  -- An owner calling it posts nothing.
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
+  assert post_completed_bookings() = 0, 'owners cannot post';
+  -- Staff can.
+  perform set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
+  n := post_completed_bookings();
+  reset role;
+  assert n >= 1, 'posted at least the ended stay';
+
+  select le.*, gc.code into line from ledger_entries le join gl_categories gc on gc.id = le.category_id
+   where le.source_table = 'bookings' and le.source_id = ended;
+  assert line.amount_aed = 1368.07, 'the payout, not the guest total: ' || line.amount_aed;
+  assert line.code = 'INC-BOOKING' and line.direction = 'income', 'booking income';
+  assert line.entry_date = '2021-05-04', 'dated the check-out day';
+  assert line.vat_amount_aed = 0 and not line.vat_applicable, 'no VAT';
+  assert line.owner_id = (select owner_id from unit_ownerships where unit_id = v_unit and end_date is null
+                           order by is_primary_contact desc, ownership_pct desc limit 1), 'the unit owner';
+  assert line.booking_id = ended, 'linked to the booking';
+  assert not exists (select 1 from ledger_entries where source_id = unpriced), 'an unpriced stay posts nothing';
+  assert not exists (select 1 from ledger_entries le join bookings b on b.id = le.source_id
+                      where le.source_table = 'bookings' and b.check_out > current_date), 'future stays post nothing';
+
+  assert post_completed_bookings() = 0, 'running again posts nothing new';
+  assert (select count(*) from ledger_entries where source_id = ended) = 1, 'still one line';
+
+  -- A corrected payout follows; once in a statement it is frozen.
+  update bookings set payout_expected_aed = 1400 where id = ended;
+  perform post_completed_bookings();
+  assert (select amount_aed from ledger_entries where source_id = ended) = 1400, 'correction followed';
+  insert into owner_statements (statement_number, owner_id, period_start, period_end)
+  values ('TEST-STMT-46', line.owner_id, '2021-05-01', '2021-05-31')
+  returning id into st;
+  update ledger_entries set statement_id = st where source_id = ended;
+  update bookings set payout_expected_aed = 999 where id = ended;
+  perform post_completed_bookings();
+  assert (select amount_aed from ledger_entries where source_id = ended) = 1400, 'stated line frozen';
+  update ledger_entries set statement_id = null where source_id = ended;
+  delete from owner_statements where id = st;
+
+  -- Cancelled after posting: the unstated line goes.
+  update bookings set status = 'cancelled', cancelled_on = '2021-05-01' where id = ended;
+  perform post_completed_bookings();
+  assert not exists (select 1 from ledger_entries where source_id = ended), 'cancelled stay line removed';
+
+  raise notice 'TEST 46  PASS  ended stays post their payout (no VAT, check-out date, owner); corrections follow until stated';
+end $$;

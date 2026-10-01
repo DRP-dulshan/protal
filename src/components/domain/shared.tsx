@@ -71,19 +71,21 @@ export function StatCard({
 
   const body = (
     <Card className={cn("h-full transition-shadow", toneRing[tone], href && "hover:shadow-md")}>
-      <CardContent className="flex items-start justify-between gap-3 p-4">
+      <CardContent className="flex items-start justify-between gap-3 p-3 sm:p-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)] sm:text-xs">
             {label}
           </p>
-          <p className="tabular mt-1.5 truncate text-2xl font-semibold">{value}</p>
+          {/* Wraps rather than cuts off: a figure is no use as "AED 58,…". */}
+          <p className="tabular mt-1.5 break-words text-xl font-semibold leading-tight sm:text-2xl">
+            {value}
+          </p>
           {sublabel && (
-            <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]">
-              {sublabel}
-            </p>
+            <p className="mt-1 text-xs leading-snug text-[var(--muted-foreground)]">{sublabel}</p>
           )}
         </div>
-        {icon && <div className="shrink-0 text-[var(--muted-foreground)]">{icon}</div>}
+        {/* On a phone the two-up cards need every pixel for the figure. */}
+        {icon && <div className="hidden shrink-0 text-[var(--muted-foreground)] sm:block">{icon}</div>}
       </CardContent>
     </Card>
   );

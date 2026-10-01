@@ -276,7 +276,7 @@ export default async function BookingsPage({
             <TableHeader>
               <TableRow>
                 <TableHead>Booking</TableHead>
-                <TableHead>Unit</TableHead>
+                <TableHead className="hidden sm:table-cell">Unit</TableHead>
                 <TableHead className="hidden md:table-cell">Guest</TableHead>
                 <TableHead>Stay</TableHead>
                 <TableHead className="hidden lg:table-cell">Channel</TableHead>
@@ -294,14 +294,18 @@ export default async function BookingsPage({
                     {b.external_booking_id && (
                       <p className="text-xs text-[var(--muted-foreground)]">{b.external_booking_id}</p>
                     )}
+                    {/* On a phone the unit sits under the booking, not in its own column. */}
+                    <p className="text-xs sm:hidden">
+                      {b.units?.properties?.name} · {b.units?.unit_number}
+                    </p>
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="hidden text-sm sm:table-cell">
                     {b.units?.properties?.name} · {b.units?.unit_number}
                   </TableCell>
                   <TableCell className="hidden text-sm md:table-cell">
                     {b.guests?.full_name ?? "—"}
                   </TableCell>
-                  <TableCell className="tabular whitespace-nowrap text-sm">
+                  <TableCell className="tabular text-sm sm:whitespace-nowrap">
                     {formatDate(b.check_in)} → {formatDate(b.check_out)}
                     <p className="text-xs text-[var(--muted-foreground)]">
                       {b.nights} night{b.nights === 1 ? "" : "s"}

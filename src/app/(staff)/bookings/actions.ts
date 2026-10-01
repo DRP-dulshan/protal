@@ -491,10 +491,15 @@ export async function deleteBooking(bookingId: string): Promise<ActionState> {
     .maybeSingle();
   if (!booking) return { error: "Booking not found." };
 
+  // The stay's own income line (posted when it ended, migration 0023) goes
+  // with it unless an owner statement already includes it.
   const money = await Promise.all(
-    (["ledger_entries", "invoices", "payments"] as const).map((table) =>
-      supabase.from(table).select("id", { count: "exact", head: true }).eq("booking_id", bookingId)
-    )
+    (["ledger_entries", "invoices", "payments"] as const).map((table) => {
+      const q = supabase.from(table).select("id", { count: "exact", head: true }).eq("booking_id", bookingId);
+      return table === "ledger_entries"
+        ? q.or("source_table.is.null,source_table.neq.bookings,statement_id.not.is.null")
+        : q;
+    })
   );
   const failed = money.find((m) => m.error);
   if (failed?.error) return { error: failed.error.message };
@@ -509,6 +514,13 @@ export async function deleteBooking(bookingId: string): Promise<ActionState> {
     .delete()
     .eq("booking_id", bookingId)
     .in("status", ["pending", "assigned"]);
+  const { error: lineError } = await supabase
+    .from("ledger_entries")
+    .delete()
+    .eq("source_table", "bookings")
+    .eq("source_id", bookingId)
+    .is("statement_id", null);
+  if (lineError) return { error: lineError.message };
 
   const { data: removed, error } = await supabase.from("bookings").delete().eq("id", bookingId).select("id");
   if (error) return { error: explain(error) };

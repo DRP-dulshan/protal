@@ -195,7 +195,7 @@ export default async function OwnerPortalPage() {
                       <TableCell>
                         <Link
                           href={`/portal/owner/units/${unit.id}`}
-                          className="truncate font-medium hover:underline"
+                          className="break-words font-medium hover:underline"
                         >
                           {unit.property_name} · {unit.unit_number}
                         </Link>
@@ -225,7 +225,7 @@ export default async function OwnerPortalPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Item</TableHead>
-                    <TableHead>Due</TableHead>
+                    <TableHead className="hidden sm:table-cell">Due</TableHead>
                     <TableHead className="text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -233,12 +233,15 @@ export default async function OwnerPortalPage() {
                   {compliance.map((item, i) => (
                     <TableRow key={i}>
                       <TableCell>
-                        <p className="truncate font-medium">{item.label}</p>
+                        <p className="break-words font-medium">{item.label}</p>
                         <p className="text-xs text-[var(--muted-foreground)]">
                           {item.kind ? COMPLIANCE_KIND[item.kind] : ""}
+                          <span className="sm:hidden"> · {formatDate(item.due_date)}</span>
                         </p>
                       </TableCell>
-                      <TableCell className="tabular text-sm">{formatDate(item.due_date)}</TableCell>
+                      <TableCell className="tabular hidden text-sm sm:table-cell">
+                        {formatDate(item.due_date)}
+                      </TableCell>
                       <TableCell className="text-right">
                         <ComplianceBadge
                           severity={item.severity ?? "missing"}
@@ -287,7 +290,7 @@ function MaintenanceCard({
           <TableHeader>
             <TableRow>
               <TableHead>Job</TableHead>
-              <TableHead className="text-right">Quote</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">Quote</TableHead>
               <TableHead className="text-right">Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -295,10 +298,18 @@ function MaintenanceCard({
             {tickets.map((ticket) => (
               <TableRow key={ticket.id}>
                 <TableCell>
-                  <p className="truncate font-medium">{ticket.title}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">{ticket.ticket_number}</p>
+                  <p className="break-words font-medium">{ticket.title}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    {ticket.ticket_number}
+                    {ticket.quoted_amount_aed != null && (
+                      <span className="sm:hidden">
+                        {" · Quote "}
+                        <Money amount={ticket.quoted_amount_aed} />
+                      </span>
+                    )}
+                  </p>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="hidden text-right sm:table-cell">
                   <Money amount={ticket.quoted_amount_aed} />
                 </TableCell>
                 <TableCell className="text-right">

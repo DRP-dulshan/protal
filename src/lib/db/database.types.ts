@@ -4660,6 +4660,10 @@ export type Database = {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      post_completed_bookings: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       raise_owner_ticket: {
         Args: Record<string, unknown>;
         Returns: unknown;
