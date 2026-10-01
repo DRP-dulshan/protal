@@ -102,7 +102,7 @@ export default async function BookingsPage({
     query.limit(500),
     supabase
       .from("v_units_overview")
-      .select("id, unit_number, property_name")
+      .select("id, unit_number, property_name, owner_name")
       .eq("is_active", true)
       .in("operating_mode", ["short_term", "both"])
       .order("property_name"),
@@ -135,9 +135,13 @@ export default async function BookingsPage({
   const canManage = can(profile.role, "bookings.manage");
   const unpriced = unpricedResult.count ?? 0;
 
+  // The unit's primary owner, shown with each stay.
+  const ownerOf = new Map((unitsResult.data ?? []).map((u) => [u.id, u.owner_name]));
+
   const exportRows = bookings.map((b) => ({
     Booking: b.booking_number,
     Unit: `${b.units?.properties?.name ?? ""} ${b.units?.unit_number ?? ""}`.trim(),
+    Owner: ownerOf.get(b.unit_id) ?? "",
     Guest: b.guests?.full_name ?? "",
     Channel: SALES_CHANNEL[b.channel],
     "Channel ref": b.external_booking_id ?? "",
@@ -346,10 +350,14 @@ export default async function BookingsPage({
                     {/* On a phone the unit sits under the booking, not in its own column. */}
                     <p className="text-xs sm:hidden">
                       {b.units?.properties?.name} · {b.units?.unit_number}
+                      {ownerOf.get(b.unit_id) && ` · ${ownerOf.get(b.unit_id)}`}
                     </p>
                   </TableCell>
                   <TableCell className="hidden text-sm sm:table-cell">
                     {b.units?.properties?.name} · {b.units?.unit_number}
+                    {ownerOf.get(b.unit_id) && (
+                      <p className="text-xs text-[var(--muted-foreground)]">Owner: {ownerOf.get(b.unit_id)}</p>
+                    )}
                   </TableCell>
                   <TableCell className="hidden text-sm md:table-cell">
                     {b.guests?.full_name ?? "—"}
