@@ -43,7 +43,7 @@ const LIVE = ["inquiry", "tentative", "confirmed", "checked_in"] as const;
 /** Stays that happen or happened, i.e. that should have a price. */
 const PRICED = ["tentative", "confirmed", "checked_in", "checked_out"] as const;
 /** The channel tabs above the list; "all" shows every channel. */
-const CHANNELS = { all: "All channels", airbnb: "Airbnb", booking_com: "Booking.com", direct: "Direct" } as const;
+const CHANNELS = { all: "All channels", airbnb: "Airbnb", direct: "Direct" } as const;
 type ChannelTab = keyof typeof CHANNELS;
 
 /** No payout either: an Airbnb stay can be priced with its payout alone. */
@@ -170,14 +170,6 @@ export default async function BookingsPage({
               </Button>
             )}
             {canManage && (
-              <Button asChild variant="outline">
-                <Link href="/bookings/import/booking-com">
-                  <Upload className="size-4" />
-                  Import Booking.com
-                </Link>
-              </Button>
-            )}
-            {canManage && (
               <Button asChild>
                 <Link href="/bookings/new">
                   <Plus className="size-4" />
@@ -216,7 +208,7 @@ export default async function BookingsPage({
             tone="warning"
             title={`${unpriced} ${unpriced === 1 ? "stay has" : "stays have"} no price yet`}
           >
-            Airbnb and Booking.com stays arrive from the calendar with dates only.{" "}
+            Airbnb stays arrive from the calendar with dates only.{" "}
             <Link href="/bookings?view=needs_price" className="underline underline-offset-2">
               See them
             </Link>
@@ -225,10 +217,6 @@ export default async function BookingsPage({
                 {" "}or{" "}
                 <Link href="/bookings/import" className="underline underline-offset-2">
                   import Airbnb&apos;s earnings CSV
-                </Link>{" "}
-                or{" "}
-                <Link href="/bookings/import/booking-com" className="underline underline-offset-2">
-                  Booking.com&apos;s reservations
                 </Link>{" "}
                 to price them all at once
               </>
