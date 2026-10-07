@@ -52,3 +52,61 @@ begin
   delete from documents where id in (shared, hidden, others, income);
   raise notice 'TEST 52  PASS  shared unit documents reach that unit''s owner only; income stays hidden';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- TEST 53 - website listings (0028): staff read, editors write, finance reads
+-- only, owners and tenants see nothing; bad slugs and prices are refused.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  l uuid;
+  n integer;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
+  insert into website_listings (slug, title, offering, price_aed, property_type, area, beds, baths, size_sqft, status, images)
+  values ('2-br-marina-gate-for-rent', '2 BR in Marina Gate', 'rent', 180000, 'Apartment', 'Dubai Marina', 2, 2, 1200,
+          'published', '["https://example.com/a.jpg"]')
+  returning id into l;
+  update website_listings set price_aed = 175000 where id = l;
+  reset role;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', '66666666-6666-6666-6666-666666666666', true);
+  select count(*) into n from website_listings where id = l;
+  assert n = 1, 'finance reads listings';
+  begin
+    insert into website_listings (slug, title, offering, price_aed, property_type, area, size_sqft)
+    values ('finance-try', 'Finance listing', 'buy', 1, 'Villa', 'Jumeirah', 100);
+    raise exception 'finance must not add listings';
+  exception when insufficient_privilege then null;
+  end;
+  update website_listings set price_aed = 1 where id = l;
+  reset role;
+  assert (select price_aed from website_listings where id = l) = 175000, 'finance cannot change a listing';
+
+  foreach n in array array[3, 5] loop
+    set local role authenticated;
+    perform set_config('request.jwt.claim.sub',
+      case n when 3 then '33333333-3333-3333-3333-333333333333' else '55555555-5555-5555-5555-555555555555' end, true);
+    assert not exists (select 1 from website_listings), 'owners and tenants see no listings';
+    reset role;
+  end loop;
+
+  begin
+    insert into website_listings (slug, title, offering, price_aed, property_type, area, size_sqft)
+    values ('Bad Slug!', 'Bad', 'buy', 100, 'Villa', 'Jumeirah', 100);
+    raise exception 'a bad slug must be refused';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into website_listings (slug, title, offering, price_aed, property_type, area, size_sqft)
+    values ('zero-price', 'Zero price', 'buy', 0, 'Villa', 'Jumeirah', 100);
+    raise exception 'a zero price must be refused';
+  exception when check_violation then null;
+  end;
+
+  assert exists (select 1 from storage.buckets where id = 'listing-photos' and public), 'public photo bucket';
+  delete from website_listings where id = l;
+  raise notice 'TEST 53  PASS  website listings: staff read, editors write, owners/tenants none; slugs and prices checked';
+end $$;

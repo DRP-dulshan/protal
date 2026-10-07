@@ -55,6 +55,8 @@ export type Capability =
   | "documents.view"
   | "documents.upload"
   | "compliance.view"
+  // Website listings (sale and rental, shown on the D|R|P website)
+  | "website.manage"
   // CRM & comms
   | "leads.manage"
   | "messages.send"
@@ -72,6 +74,7 @@ const ALL: Capability[] = [
   "finance.view", "finance.manage", "statements.view", "statements.issue",
   "maintenance.view", "maintenance.raise", "maintenance.assign", "maintenance.approve_owner",
   "documents.view", "documents.upload", "compliance.view",
+  "website.manage",
   "leads.manage", "messages.send",
   "settings.manage", "users.manage", "audit.view",
 ];
@@ -88,6 +91,7 @@ export const CAPABILITIES: Record<Role, Capability[]> = {
     "finance.view", "statements.view",
     "maintenance.view", "maintenance.raise", "maintenance.assign",
     "documents.view", "documents.upload", "compliance.view",
+    "website.manage",
     "leads.manage", "messages.send",
   ],
 
@@ -98,6 +102,7 @@ export const CAPABILITIES: Record<Role, Capability[]> = {
     "bookings.view", "bookings.manage",
     "maintenance.view", "maintenance.raise",
     "documents.view", "documents.upload",
+    "website.manage",
     "leads.manage", "messages.send",
   ],
 
@@ -147,6 +152,7 @@ export const CAPABILITIES: Record<Role, Capability[]> = {
     "units.view",
     "bookings.view",
     "documents.view", "documents.upload",
+    "website.manage",
     "leads.manage", "messages.send",
   ],
 };

@@ -226,7 +226,7 @@ begin
                                     det_classification, issued_on, expires_on,
                                     status, noc_reference, noc_expires_on)
   values (v_unit_b, 'DET-HH-2026-44512', 'D|R|P Holiday Homes', 'Deluxe',
-          '2026-02-01', '2027-01-31', 'active', 'NOC-MG1-2026-77', '2027-01-31');
+          current_date - 240, current_date + 500, 'active', 'NOC-MG1-2026-77', current_date + 500);
 
   insert into channel_listings (unit_id, channel, is_active, headline, base_rate_aed)
   values (v_unit_b, 'airbnb', true, 'Marina view 1BR', 720);
