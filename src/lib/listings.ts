@@ -111,8 +111,9 @@ export function toWebsiteListing(row: ListingRow): WebsiteListing {
 }
 
 /**
- * A listing from the website's own data file, as a row to save. Commercial
- * units and anything else the website does not show are left out (null).
+ * A listing from the website's own data file (its Property Finder listings),
+ * as a row. Commercial units and anything else the website does not show are
+ * left out (null). Used to check that the feed's shape matches that file.
  */
 export function fromWebsiteListing(x: unknown): Omit<ListingRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "unit_id" | "status"> | null {
   if (!x || typeof x !== "object") return null;

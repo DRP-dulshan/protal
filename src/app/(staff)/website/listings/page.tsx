@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Globe, ImageOff, Plus, Search, Upload } from "lucide-react";
+import { Globe, ImageOff, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { Callout, EmptyState, PageHeader } from "@/components/domain/shared";
@@ -74,7 +74,7 @@ export default async function WebsiteListingsPage({
     <>
       <PageHeader
         title="Website listings"
-        description={`Sale and rental listings on the D|R|P website. ${live.length} on the website now: ${live.filter((l) => l.offering === "buy").length} for sale, ${live.filter((l) => l.offering === "rent").length} for rent.`}
+        description={`Listings added here appear on the D|R|P website next to the Property Finder listings; one with the same web address as a Property Finder listing replaces it. ${live.length} on the website now: ${live.filter((l) => l.offering === "buy").length} for sale, ${live.filter((l) => l.offering === "rent").length} for rent.`}
         actions={
           <>
             <ExportButton
@@ -97,12 +97,6 @@ export default async function WebsiteListingsPage({
               }))}
             />
             <RebuildButton configured={Boolean(env.websiteDeployHookUrl)} />
-            <Button asChild variant="outline">
-              <Link href="/website/listings/import">
-                <Upload className="size-4" />
-                Import
-              </Link>
-            </Button>
             <Button asChild>
               <Link href="/website/listings/new">
                 <Plus className="size-4" />
@@ -169,14 +163,14 @@ export default async function WebsiteListingsPage({
           title={all.length === 0 ? "No listings yet" : "Nothing matches"}
           description={
             all.length === 0
-              ? "Add a listing, or import the website's current listings to start from them."
+              ? "The website shows the Property Finder listings on its own. Add a listing here for anything that is not on Property Finder."
               : "Change the filters or the search."
           }
           icon={<Globe className="size-8" />}
           action={
             all.length === 0 ? (
               <Button asChild>
-                <Link href="/website/listings/import">Import the website&apos;s listings</Link>
+                <Link href="/website/listings/new">New listing</Link>
               </Button>
             ) : undefined
           }
