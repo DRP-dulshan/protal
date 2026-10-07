@@ -12,7 +12,6 @@ import {
   FURNISHINGS,
   PHOTO_BUCKET,
   PROPERTY_TYPES,
-  fromWebsiteListing,
   imagesOf,
   slugify,
   toFeatures,
@@ -233,90 +232,5 @@ export async function rebuildWebsiteNow(): Promise<ListingState> {
       result.reason === "not_configured"
         ? "The website rebuild is not connected yet (WEBSITE_DEPLOY_HOOK_URL). Changes appear on the website's next deploy."
         : `The website did not start rebuilding (${result.reason}). Try again in a minute.`,
-  };
-}
-
-export type ImportState = ListingState & {
-  added?: number;
-  updated?: number;
-  /** Already in the portal, left as they are. */
-  unchanged?: number;
-  /** Entries the website does not show (commercial units) or that could not be read. */
-  skipped?: number;
-};
-
-/**
- * Brings the website's current listings into the portal, from its data file
- * (listings.json) - uploaded, or fetched from a link to it. Listings are
- * matched by web address: new ones are added as published, ones already
- * here are left as they are unless "update" is ticked.
- */
-export async function importWebsiteListings(_prev: ImportState, formData: FormData): Promise<ImportState> {
-  const profile = await requireEditor();
-  if (!profile) return { error: NOT_ALLOWED };
-
-  let text: string;
-  const file = formData.get("file");
-  const link = String(formData.get("url") ?? "").trim();
-  if (file instanceof File && file.size > 0) {
-    if (file.size > 20_000_000) return { error: "That file is too large." };
-    text = await file.text();
-  } else if (link) {
-    if (!/^https:\/\//.test(link)) return { error: "The link must start with https://" };
-    try {
-      const response = await fetch(link, { signal: AbortSignal.timeout(20_000), cache: "no-store" });
-      if (!response.ok) return { error: `The link answered HTTP ${response.status}.` };
-      text = await response.text();
-    } catch {
-      return { error: "The link could not be reached." };
-    }
-  } else {
-    return { error: "Choose the listings.json file, or paste a link to it." };
-  }
-
-  let items: unknown;
-  try {
-    items = JSON.parse(text);
-  } catch {
-    return { error: "That is not a listings file (it is not JSON)." };
-  }
-  if (!Array.isArray(items)) return { error: "That is not a listings file (expected a list of listings)." };
-
-  const rows = items.map(fromWebsiteListing);
-  const valid = rows.filter((r): r is NonNullable<typeof r> => r !== null);
-  const skipped = rows.length - valid.length;
-  if (valid.length === 0) return { error: "No listings in this file could be read.", skipped };
-
-  const supabase = await createClient();
-  const { data: existing, error: readError } = await supabase.from("website_listings").select("slug");
-  if (readError) return { error: readError.message };
-  const known = new Set((existing ?? []).map((r) => r.slug));
-  const overwrite = formData.get("update") === "on";
-
-  const fresh = valid.filter((r) => !known.has(r.slug));
-  const repeat = overwrite ? valid.filter((r) => known.has(r.slug)) : [];
-
-  if (fresh.length) {
-    const { error } = await supabase
-      .from("website_listings")
-      .insert(fresh.map((r) => ({ ...r, status: "published", created_by: profile.id, updated_by: profile.id })));
-    if (error) return { error: `Nothing was imported: ${explain(error)}` };
-  }
-  for (const r of repeat) {
-    const { error } = await supabase
-      .from("website_listings")
-      .update({ ...r, updated_by: profile.id })
-      .eq("slug", r.slug);
-    if (error) return { error: `Stopped at ${r.slug}: ${explain(error)}`, added: fresh.length };
-  }
-
-  if (fresh.length || repeat.length) await rebuildWebsite();
-  revalidatePath("/website/listings");
-  return {
-    success: "Import finished.",
-    added: fresh.length,
-    updated: repeat.length,
-    unchanged: overwrite ? 0 : valid.length - fresh.length,
-    skipped,
   };
 }
