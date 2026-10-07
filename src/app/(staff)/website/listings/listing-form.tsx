@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useActionState } from "react";
 import { ArrowLeft, ArrowRight, ImagePlus, Link2, Loader2, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +9,6 @@ import {
   FormError,
   FormSection,
   SelectField,
-  SubmitBar,
   TextAreaField,
   TextField,
 } from "@/components/domain/form";
@@ -52,6 +52,7 @@ export function ListingForm({
   const [uploading, setUploading] = React.useState(0);
   const [link, setLink] = React.useState("");
   const [deleting, startDelete] = React.useTransition();
+  const [saving, startSaving] = React.useTransition();
   const fileInput = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -102,7 +103,17 @@ export function ListingForm({
   }
 
   return (
-    <form action={action} className="space-y-5">
+    <form
+      action={action}
+      // Submitted by hand so a refused save keeps everything typed: a form
+      // action resets the form's fields once it returns, even with an error.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startSaving(() => action(data));
+      }}
+      className="space-y-5"
+    >
       <FormError message={state.error} />
       <input type="hidden" name="images" value={JSON.stringify(images)} />
 
@@ -402,7 +413,15 @@ export function ListingForm({
         ) : (
           <span />
         )}
-        <SubmitBar label={listing ? "Save listing" : "Create listing"} cancelHref="/website/listings" />
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" asChild>
+            <Link href="/website/listings">Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving && <Loader2 className="size-4 animate-spin" />}
+            {saving ? "Saving…" : listing ? "Save listing" : "Create listing"}
+          </Button>
+        </div>
       </div>
     </form>
   );

@@ -9,10 +9,10 @@ import { dubaiToday } from "@/lib/calendar";
 import { LISTING_STATUSES, type ListingStatus } from "@/lib/listings";
 import { ListingForm } from "../listing-form";
 import { listingFormOptions } from "../form-data";
+import { env } from "@/lib/env";
 
 export const metadata = { title: "Edit listing" };
 
-const WEBSITE = "https://dubairapidproperties.com";
 
 export default async function EditListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,7 +34,7 @@ export default async function EditListingPage({ params }: { params: Promise<{ id
         actions={
           listing.status === "published" ? (
             <Button asChild variant="outline">
-              <Link href={`${WEBSITE}/properties/${listing.slug}`} target="_blank" rel="noopener noreferrer">
+              <Link href={`${env.websiteUrl}/properties/${listing.slug}`} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="size-4" />
                 View on the website
               </Link>

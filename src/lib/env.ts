@@ -56,6 +56,8 @@ export const env = {
   // live in a couple of minutes. Unset: the website updates on its next
   // deploy.
   websiteDeployHookUrl: optional("WEBSITE_DEPLOY_HOOK_URL"),
+  // Where the website is served, for "View on the website" links.
+  websiteUrl: (optional("WEBSITE_URL") ?? "https://dubairapidproperties.com").replace(/\/$/, ""),
 
   storage: {
     driver: (optional("STORAGE_DRIVER") ?? "supabase") as "supabase" | "s3",
