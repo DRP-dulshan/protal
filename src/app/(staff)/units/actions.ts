@@ -172,9 +172,10 @@ export async function createUnit(
     );
 
     if (ownershipError) {
-      return {
-        error: `Unit created, but the ownership record failed: ${ownershipError.message}`,
-      };
+      // Without its owner the unit would block a retry ("already exists"), so
+      // the unit created a moment ago goes too and the form can be resent.
+      await supabase.from("units").delete().eq("id", unit.id);
+      return { error: `The unit was not saved: the owner could not be recorded (${ownershipError.message}).` };
     }
   }
 

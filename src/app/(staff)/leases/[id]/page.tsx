@@ -483,6 +483,7 @@ export default async function LeaseDetailPage({
             entityId={id}
             unitId={lease.unit_id}
             canUpload={can(profile.role, "documents.upload")}
+            canDelete={profile.role === "super_admin"}
           />
         </TabsContent>
       </Tabs>

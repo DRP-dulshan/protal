@@ -87,7 +87,7 @@ export async function updateStatementStatus(
   const today = new Date().toISOString().slice(0, 10);
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("owner_statements")
     .update({
       status,
@@ -96,9 +96,11 @@ export async function updateStatementStatus(
       approved_at: status === "approved" ? new Date().toISOString() : undefined,
       paid_on: status === "paid" ? today : undefined,
     })
-    .eq("id", statementId);
+    .eq("id", statementId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) return { error: "This statement could not be changed. You may not have access to it." };
 
   revalidatePath(`/finance/statements/${statementId}`);
   revalidatePath("/finance/statements");

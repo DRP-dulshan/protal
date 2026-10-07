@@ -186,7 +186,7 @@ export function SettingsForm({ settings }: { settings: Tables<"company_settings"
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Owner notifications</CardTitle>
+          <CardTitle className="text-base">Owners</CardTitle>
         </CardHeader>
         <CardContent>
           <label className="flex items-start gap-3 text-sm">
@@ -201,6 +201,21 @@ export function SettingsForm({ settings }: { settings: Tables<"company_settings"
               <span className="block text-xs text-[var(--muted-foreground)]">
                 New, moved and cancelled stays. Off: owners see these only in their portal, and
                 nothing is emailed to them. The office email is sent either way.
+              </span>
+            </span>
+          </label>
+          <label className="mt-4 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="showGuestFirstNameToOwners"
+              defaultChecked={settings.show_guest_first_name_to_owners}
+              className="mt-0.5 size-4"
+            />
+            <span>
+              <span className="font-medium">Show owners the guest&apos;s first name</span>
+              <span className="block text-xs text-[var(--muted-foreground)]">
+                On their bookings and calendar. Off: owners see dates, nights and guest numbers
+                only. Surnames, contact details and prices are never shown.
               </span>
             </span>
           </label>

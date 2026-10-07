@@ -50,6 +50,15 @@ export const env = {
   // (Supabase pg_cron) sends it as "Authorization: Bearer <secret>".
   cronSecret: optional("CRON_SECRET"),
 
+  // The D|R|P website builds its Buy / Rent pages from /api/public/listings.
+  // A Vercel deploy hook for the website project: when set, saving a listing
+  // that is (or was) on the website starts a rebuild, so the change goes
+  // live in a couple of minutes. Unset: the website updates on its next
+  // deploy.
+  websiteDeployHookUrl: optional("WEBSITE_DEPLOY_HOOK_URL"),
+  // Where the website is served, for "View on the website" links.
+  websiteUrl: (optional("WEBSITE_URL") ?? "https://dubairapidproperties.com").replace(/\/$/, ""),
+
   storage: {
     driver: (optional("STORAGE_DRIVER") ?? "supabase") as "supabase" | "s3",
     documentsBucket: optional("STORAGE_BUCKET_DOCUMENTS") ?? "documents",

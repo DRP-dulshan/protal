@@ -60,6 +60,12 @@ export const STAFF_NAV: NavSection[] = [
     ],
   },
   {
+    label: "Website",
+    items: [
+      { label: "Listings", href: "/website/listings", icon: "Globe", capability: "website.manage" },
+    ],
+  },
+  {
     label: "Finance",
     items: [
       { label: "Ledger", href: "/finance", icon: "Receipt", capability: "finance.view" },

@@ -4510,6 +4510,124 @@ export type Database = {
           },
         ];
       };
+      website_listings: {
+        Row: {
+          id: string;
+          slug: string;
+          status: string;
+          title: string;
+          offering: string;
+          price_aed: number;
+          property_type: string;
+          area: string;
+          building: string | null;
+          map_query: string | null;
+          map_exact: boolean;
+          beds: number;
+          baths: number;
+          size_sqft: number;
+          completion: string;
+          furnishing: string | null;
+          listed_at: string;
+          agent: string | null;
+          images: Json;
+          description: string;
+          features: string[];
+          ref: string | null;
+          permit: string | null;
+          source_url: string | null;
+          unit_id: string | null;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          status?: string;
+          title: string;
+          offering: string;
+          price_aed: number;
+          property_type: string;
+          area: string;
+          building?: string | null;
+          map_query?: string | null;
+          map_exact?: boolean;
+          beds?: number;
+          baths?: number;
+          size_sqft: number;
+          completion?: string;
+          furnishing?: string | null;
+          listed_at?: string;
+          agent?: string | null;
+          images?: Json;
+          description?: string;
+          features?: string[];
+          ref?: string | null;
+          permit?: string | null;
+          source_url?: string | null;
+          unit_id?: string | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          status?: string;
+          title?: string;
+          offering?: string;
+          price_aed?: number;
+          property_type?: string;
+          area?: string;
+          building?: string | null;
+          map_query?: string | null;
+          map_exact?: boolean;
+          beds?: number;
+          baths?: number;
+          size_sqft?: number;
+          completion?: string;
+          furnishing?: string | null;
+          listed_at?: string;
+          agent?: string | null;
+          images?: Json;
+          description?: string;
+          features?: string[];
+          ref?: string | null;
+          permit?: string | null;
+          source_url?: string | null;
+          unit_id?: string | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "website_listings_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "website_listings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "website_listings_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       owner_bookings_view: {

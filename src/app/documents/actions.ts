@@ -78,7 +78,8 @@ export async function uploadDocument(
     issuedOn: formData.get("issuedOn") || undefined,
     expiresOn: formData.get("expiresOn") || undefined,
     isSensitive: formData.get("isSensitive") === "on",
-    isOwnerVisible: formData.get("isOwnerVisible") !== "off",
+    // Checkboxes send "on" when ticked and nothing at all when not.
+    isOwnerVisible: formData.get("isOwnerVisible") === "on",
     isTenantVisible: formData.get("isTenantVisible") === "on",
   });
 
@@ -149,4 +150,33 @@ export async function getDocumentUrl(documentId: string): Promise<string | null>
 
   if (!doc) return null;
   return storage.signedUrl(doc.bucket, doc.storage_path, 300);
+}
+
+/**
+ * Removes a document filed by mistake: its row and the file in the vault.
+ * Super admins only, as the database allows (documents_delete, pms.is_admin).
+ */
+export async function deleteDocument(documentId: string): Promise<UploadState> {
+  const profile = await requireProfile();
+  if (profile.role !== "super_admin") return { error: "Only a super admin can delete a document." };
+  if (!z.string().uuid().safeParse(documentId).success) return { error: "Document not found." };
+
+  const supabase = await createClient();
+  const { data: removed, error } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", documentId)
+    .select("bucket, storage_path, unit_id, owner_id");
+  if (error) return { error: error.message };
+  const doc = removed?.[0];
+  if (!doc) return { error: "This document could not be deleted." };
+
+  // The row is gone either way; a file left behind is only wasted space.
+  await storage.remove(doc.bucket, doc.storage_path).catch(() => {});
+
+  if (doc.unit_id) revalidatePath(`/units/${doc.unit_id}`);
+  if (doc.owner_id) revalidatePath(`/owners/${doc.owner_id}`);
+  revalidatePath("/leases", "layout");
+  revalidatePath("/portal/owner/documents");
+  return { success: "Document deleted." };
 }

@@ -30,6 +30,7 @@ const schema = z.object({
   maintenanceThreshold: z.coerce.number().min(0),
   // A checkbox: present when ticked.
   emailOwnersAboutBookings: z.literal("on").optional(),
+  showGuestFirstNameToOwners: z.literal("on").optional(),
 });
 
 export async function updateCompanySettings(
@@ -68,6 +69,7 @@ export async function updateCompanySettings(
       permit_renewal_reminder_days: input.permitRenewalReminderDays,
       maintenance_owner_approval_threshold: input.maintenanceThreshold,
       email_owners_about_bookings: input.emailOwnersAboutBookings === "on",
+      show_guest_first_name_to_owners: input.showGuestFirstNameToOwners === "on",
     })
     .eq("id", true);
 
