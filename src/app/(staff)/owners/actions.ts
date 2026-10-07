@@ -82,20 +82,21 @@ export async function createOwner(
 
   if (error) return { error: error.message };
 
-  // Bank details go in their own table so RLS can restrict them to finance.
-  if (input.iban && input.bankName) {
+  // Bank details go in their own table so RLS can restrict them to finance;
+  // a role without access to them does not get to set them either.
+  if (can(profile.role, "owners.bank_details") && input.iban && input.bankName) {
     const { error: bankError } = await supabase.from("owner_bank_accounts").insert({
       owner_id: owner.id,
       account_holder: input.accountHolder || input.fullName,
       bank_name: input.bankName,
-      iban: input.iban,
+      iban: input.iban.replace(/\s+/g, "").toUpperCase(),
       swift_bic: input.swiftBic || null,
     });
 
     if (bankError) {
-      return {
-        error: `Owner created, but the bank account failed: ${bankError.message}`,
-      };
+      // Otherwise a retry would add the same owner twice.
+      await supabase.from("owners").delete().eq("id", owner.id);
+      return { error: `The owner was not saved: the bank account could not be recorded (${bankError.message}).` };
     }
   }
 

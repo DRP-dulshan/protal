@@ -740,6 +740,7 @@ export default async function UnitDetailPage({
             entityId={id}
             unitId={id}
             canUpload={can(profile.role, "documents.upload")}
+            canDelete={profile.role === "super_admin"}
           />
         </TabsContent>
       </Tabs>

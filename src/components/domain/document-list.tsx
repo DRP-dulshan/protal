@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Upload, ExternalLink, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileText, Upload, ExternalLink, Lock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
 import { EmptyState } from "@/components/domain/shared";
 import { ComplianceBadge } from "@/components/domain/status-badge";
 import { DocumentUploader } from "./document-uploader";
-import { getDocumentUrl } from "@/app/documents/actions";
+import { deleteDocument, getDocumentUrl } from "@/app/documents/actions";
 import { formatDate, daysUntil, severityFor } from "@/lib/dates";
 import { DOCUMENT_KIND } from "@/lib/labels";
 import type { Tables, Enums } from "@/lib/db/database.types";
@@ -38,6 +39,7 @@ export function DocumentList({
   unitId,
   ownerId,
   canUpload,
+  canDelete = false,
   title = "Documents",
 }: {
   documents: Document[];
@@ -46,9 +48,28 @@ export function DocumentList({
   unitId?: string;
   ownerId?: string;
   canUpload: boolean;
+  /** Super admins may remove a document filed by mistake. */
+  canDelete?: boolean;
   title?: string;
 }) {
+  const router = useRouter();
   const [uploading, setUploading] = React.useState(false);
+  const [deleting, setDeleting] = React.useState<string | null>(null);
+
+  const remove = async (id: string, title: string) => {
+    if (!window.confirm(`Delete "${title}"? The file is removed for good.`)) return;
+    setDeleting(id);
+    try {
+      const result = await deleteDocument(id);
+      if (result.error) toast.error(result.error);
+      else {
+        toast.success(result.success ?? "Document deleted.");
+        router.refresh();
+      }
+    } finally {
+      setDeleting(null);
+    }
+  };
   const [opening, setOpening] = React.useState<string | null>(null);
 
   // The bucket is private, so a link is minted on demand and expires shortly
@@ -157,15 +178,28 @@ export function DocumentList({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => open(doc.id)}
-                        disabled={opening === doc.id}
-                        aria-label={`Open ${doc.title}`}
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => open(doc.id)}
+                          disabled={opening === doc.id}
+                          aria-label={`Open ${doc.title}`}
+                        >
+                          <ExternalLink className="size-4" />
+                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(doc.id, doc.title)}
+                            disabled={deleting === doc.id}
+                            aria-label={`Delete ${doc.title}`}
+                          >
+                            <Trash2 className="size-4 text-[var(--destructive)]" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

@@ -85,7 +85,9 @@ export async function grantPortalAccess(
   const { data: existing } = await supabase
     .from("profiles")
     .select("id, role")
-    .eq("email", email)
+    // Case-insensitive, with _ and % taken literally.
+    .ilike("email", email.replace(/[\\%_]/g, "\\$&"))
+    .limit(1)
     .maybeSingle();
   if (existing && isStaff(existing.role)) {
     return {
@@ -111,6 +113,15 @@ export async function grantPortalAccess(
   }
 
   const userId = result.data.user.id;
+
+  // The same check by account rather than by address: a staff login whose
+  // profile spells its email differently must still never become an owner.
+  const { data: account } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
+  if (account && isStaff(account.role)) {
+    return {
+      error: "That email belongs to a D|R|P staff account. Use the owner's own email address.",
+    };
+  }
 
   const { error: profileError } = await supabase.from("profiles").upsert(
     {

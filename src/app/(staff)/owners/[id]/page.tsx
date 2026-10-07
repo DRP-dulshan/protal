@@ -429,6 +429,7 @@ export default async function OwnerDetailPage({
             entityId={id}
             ownerId={id}
             canUpload={can(profile.role, "documents.upload")}
+            canDelete={profile.role === "super_admin"}
           />
         </TabsContent>
       </Tabs>

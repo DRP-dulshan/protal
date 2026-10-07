@@ -9,6 +9,10 @@ import { can } from "@/lib/auth/rbac";
 
 export type ActionState = { error?: string; success?: string };
 
+/** RLS filters rows silently: a refused update changes nothing and reports
+ * no error, so a zero-row result is treated as refused. */
+const NOT_CHANGED = "This tenancy could not be changed. It may be outside the properties assigned to you.";
+
 const leaseSchema = z
   .object({
     unitId: z.string().uuid("Select a unit"),
@@ -100,9 +104,10 @@ export async function createLease(
   });
 
   if (scheduleError) {
-    return {
-      error: `Tenancy created, but the payment schedule failed: ${scheduleError.message}`,
-    };
+    // A draft without its schedule would block the dates for a retry, so it
+    // goes: nothing else can refer to a lease created a moment ago.
+    await supabase.from("leases").delete().eq("id", lease.id);
+    return { error: `The tenancy was not saved: the payment schedule failed (${scheduleError.message}).` };
   }
 
   revalidatePath("/leases");
@@ -135,18 +140,23 @@ export async function updateLeaseStatus(
   const supabase = await createClient();
   const terminal = status === "terminated" || status === "cancelled";
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("leases")
     .update({
       status,
       terminated_on: terminal ? new Date().toISOString().slice(0, 10) : null,
       termination_reason: terminal ? (reason ?? null) : null,
     })
-    .eq("id", leaseId);
+    .eq("id", leaseId)
+    .select("unit_id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) return { error: NOT_CHANGED };
 
   revalidatePath(`/leases/${leaseId}`);
+  revalidatePath("/leases");
+  revalidatePath(`/units/${changed[0].unit_id}`);
+  revalidatePath("/units");
   return { success: "Tenancy status updated." };
 }
 
@@ -181,23 +191,30 @@ export async function updateInstallment(
 
   const { data: current } = await supabase
     .from("lease_installments")
-    .select("amount_aed")
+    .select("amount_aed, presented_on")
     .eq("id", installmentId)
-    .single();
+    .eq("lease_id", leaseId)
+    .maybeSingle();
+  if (!current) return { error: NOT_CHANGED };
 
-  const { error } = await supabase
+  // The day a cheque was presented stays as recorded; it is set the first
+  // time the cheque is presented (or cleared without a recorded presentation).
+  const presented = status === "presented" || status === "cleared" || status === "bounced";
+  const { data: changed, error } = await supabase
     .from("lease_installments")
     .update({
       status,
       cleared_on: status === "cleared" ? today : null,
-      presented_on: status === "presented" || status === "cleared" ? today : null,
+      presented_on: presented ? (current.presented_on ?? today) : null,
       bounced_on: status === "bounced" ? today : null,
       bounce_reason: status === "bounced" ? (bounceReason ?? null) : null,
-      amount_paid_aed: status === "cleared" ? (current?.amount_aed ?? 0) : 0,
+      amount_paid_aed: status === "cleared" ? current.amount_aed : 0,
     })
-    .eq("id", installmentId);
+    .eq("id", installmentId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) return { error: NOT_CHANGED };
 
   revalidatePath(`/leases/${leaseId}`);
   revalidatePath("/finance");
@@ -257,21 +274,27 @@ export async function addOccupant(
   };
 }
 
+const removeOccupantSchema = z.object({ leaseId: z.string().uuid(), occupantId: z.string().uuid() });
+
 export async function removeOccupant(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   await requireProfile();
-  const leaseId = String(formData.get("leaseId") ?? "");
-  const occupantId = String(formData.get("occupantId") ?? "");
+  const parsed = removeOccupantSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Occupant not found." };
+  const { leaseId, occupantId } = parsed.data;
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("lease_occupants")
     .update({ removed_on: new Date().toISOString().slice(0, 10) })
-    .eq("id", occupantId);
+    .eq("id", occupantId)
+    .eq("lease_id", leaseId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) return { error: NOT_CHANGED };
 
   revalidatePath(`/leases/${leaseId}`);
   revalidatePath("/compliance");
@@ -292,6 +315,7 @@ export async function markOccupantsSynced(
   }
 
   const leaseId = String(formData.get("leaseId") ?? "");
+  if (!z.string().uuid().safeParse(leaseId).success) return { error: "Tenancy not found." };
   const now = new Date().toISOString();
   const supabase = await createClient();
 
@@ -305,12 +329,14 @@ export async function markOccupantsSynced(
 
   if (occupantError) return { error: occupantError.message };
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("leases")
     .update({ ejari_occupants_synced_at: now })
-    .eq("id", leaseId);
+    .eq("id", leaseId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) return { error: NOT_CHANGED };
 
   revalidatePath(`/leases/${leaseId}`);
   revalidatePath("/compliance");

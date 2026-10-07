@@ -37,7 +37,7 @@ export async function decideMaintenance(
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("maintenance_requests")
     .update(
       decision === "approve"
@@ -53,12 +53,21 @@ export async function decideMaintenance(
             status: "rejected",
           }
     )
-    .eq("id", ticketId);
+    .eq("id", ticketId)
+    // A quote is decided once: the same rule the portal uses to offer it.
+    .is("owner_approved_at", null)
+    .is("owner_rejected_at", null)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!changed?.length) {
+    return { error: "This quote is no longer waiting for your decision. Reload the page to see where it stands." };
+  }
 
   revalidatePath("/portal/owner/maintenance");
+  revalidatePath(`/portal/owner/maintenance/${ticketId}`);
   revalidatePath("/portal/owner");
+  revalidatePath(`/maintenance/${ticketId}`);
   return {
     success:
       decision === "approve"

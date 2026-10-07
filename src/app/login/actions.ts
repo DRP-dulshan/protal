@@ -41,7 +41,13 @@ export async function signIn(formData: FormData) {
     .eq("id", data.user.id)
     .single();
 
-  if (profile && !profile.is_active) {
+  // A login with no profile was never given access to either portal.
+  if (!profile) {
+    await supabase.auth.signOut();
+    redirect("/login?error=no_access");
+  }
+
+  if (!profile.is_active) {
     await supabase.auth.signOut();
     redirect("/login?error=account_disabled");
   }
@@ -49,7 +55,7 @@ export async function signIn(formData: FormData) {
   // Owners may only sign in on the owner host and staff only on the admin
   // host. The session is discarded immediately so no cookie for the wrong
   // portal survives the attempt.
-  if (!roleAllowedOnPortal(profile?.role as Role | undefined, portal)) {
+  if (!roleAllowedOnPortal(profile.role as Role, portal)) {
     await supabase.auth.signOut();
     redirect("/login?error=wrong_portal");
   }
