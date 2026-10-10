@@ -96,6 +96,9 @@ export default async function WebsiteListingsPage({
                 "Web address": `/properties/${l.slug}`,
               }))}
             />
+            <Button asChild variant="outline">
+              <Link href="/website/listings/property-finder">Property Finder listings</Link>
+            </Button>
             <RebuildButton configured={Boolean(env.websiteDeployHookUrl)} />
             <Button asChild>
               <Link href="/website/listings/new">
