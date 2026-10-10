@@ -253,6 +253,7 @@ export type Database = {
           imported_without_permit: boolean;
           last_seen_in_feed_at: string | null;
           import_source: string | null;
+          website_ref: string | null;
         };
         Insert: {
           id?: string;
@@ -294,6 +295,7 @@ export type Database = {
           imported_without_permit?: boolean;
           last_seen_in_feed_at?: string | null;
           import_source?: string | null;
+          website_ref?: string | null;
         };
         Update: {
           id?: string;
@@ -335,6 +337,7 @@ export type Database = {
           imported_without_permit?: boolean;
           last_seen_in_feed_at?: string | null;
           import_source?: string | null;
+          website_ref?: string | null;
         };
         Relationships: [
           {
@@ -4068,6 +4071,24 @@ export type Database = {
           booking_ical_last_error: string | null;
           booking_ical_last_event_count: number | null;
           booking_listing_name: string | null;
+          website_published: boolean;
+          website_slug: string | null;
+          website_title: string | null;
+          website_tag: string | null;
+          website_type: string | null;
+          website_area: string | null;
+          website_building: string | null;
+          website_description: string | null;
+          website_highlights: string[];
+          website_house_rules: string[];
+          website_amenities: string[];
+          website_images: Json;
+          website_lat: number | null;
+          website_lng: number | null;
+          website_maps_url: string | null;
+          website_check_in: string;
+          website_check_out: string;
+          website_seasons: Json;
         };
         Insert: {
           id?: string;
@@ -4119,6 +4140,24 @@ export type Database = {
           booking_ical_last_error?: string | null;
           booking_ical_last_event_count?: number | null;
           booking_listing_name?: string | null;
+          website_published?: boolean;
+          website_slug?: string | null;
+          website_title?: string | null;
+          website_tag?: string | null;
+          website_type?: string | null;
+          website_area?: string | null;
+          website_building?: string | null;
+          website_description?: string | null;
+          website_highlights?: string[];
+          website_house_rules?: string[];
+          website_amenities?: string[];
+          website_images?: Json;
+          website_lat?: number | null;
+          website_lng?: number | null;
+          website_maps_url?: string | null;
+          website_check_in?: string;
+          website_check_out?: string;
+          website_seasons?: Json;
         };
         Update: {
           id?: string;
@@ -4170,6 +4209,24 @@ export type Database = {
           booking_ical_last_error?: string | null;
           booking_ical_last_event_count?: number | null;
           booking_listing_name?: string | null;
+          website_published?: boolean;
+          website_slug?: string | null;
+          website_title?: string | null;
+          website_tag?: string | null;
+          website_type?: string | null;
+          website_area?: string | null;
+          website_building?: string | null;
+          website_description?: string | null;
+          website_highlights?: string[];
+          website_house_rules?: string[];
+          website_amenities?: string[];
+          website_images?: Json;
+          website_lat?: number | null;
+          website_lng?: number | null;
+          website_maps_url?: string | null;
+          website_check_in?: string;
+          website_check_out?: string;
+          website_seasons?: Json;
         };
         Relationships: [
           {
@@ -4805,6 +4862,14 @@ export type Database = {
         Returns: unknown;
       };
       raise_owner_ticket: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      website_book_unit: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      website_set_booking_status: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
