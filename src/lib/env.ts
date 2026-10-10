@@ -50,6 +50,11 @@ export const env = {
   // (Supabase pg_cron) sends it as "Authorization: Bearer <secret>".
   cronSecret: optional("CRON_SECRET"),
 
+  // Shared secret the Holiday Homes website sends ("Authorization: Bearer ...")
+  // to create and update bookings through /api/public/bookings. Without it
+  // those endpoints refuse every request; the read-only ones stay public.
+  websiteApiKey: optional("WEBSITE_API_KEY"),
+
   // The D|R|P website builds its Buy / Rent pages from /api/public/listings.
   // A Vercel deploy hook for the website project: when set, saving a listing
   // that is (or was) on the website starts a rebuild, so the change goes

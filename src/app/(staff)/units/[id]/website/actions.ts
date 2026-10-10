@@ -1,0 +1,109 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth/session";
+import { can } from "@/lib/auth/rbac";
+import { slugify } from "@/lib/listings";
+import { WEBSITE_AMENITIES, WEBSITE_TYPES, parseSeasons } from "@/lib/website-options";
+
+export type WebsiteState = { error?: string; success?: string };
+
+const lines = (s: string | undefined) => (s ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+const numOrNull = z.union([z.literal("").transform(() => null), z.coerce.number()]).nullable();
+
+const schema = z.object({
+  published: z.boolean(),
+  title: z.string().trim().max(200),
+  slug: z.string().trim().max(120),
+  type: z.union([z.literal(""), z.enum(WEBSITE_TYPES)]),
+  area: z.string().trim().max(80),
+  building: z.string().trim().max(120),
+  tag: z.string().trim().max(60),
+  description: z.string().max(20000),
+  highlights: z.string().max(5000),
+  houseRules: z.string().max(5000),
+  amenities: z.array(z.string()).refine((a) => a.every((x) => x in WEBSITE_AMENITIES), "Unknown amenity"),
+  images: z.array(z.string().regex(/^https:\/\/\S+$/, "Photo addresses must start with https://")).max(60),
+  lat: numOrNull,
+  lng: numOrNull,
+  mapsUrl: z.union([z.literal(""), z.string().url().startsWith("https://")]),
+  checkIn: z.string().regex(/^\d{2}:\d{2}$/, "Check-in time like 15:00"),
+  checkOut: z.string().regex(/^\d{2}:\d{2}$/, "Check-out time like 11:00"),
+  seasons: z.string().max(5000),
+});
+
+export async function saveUnitWebsite(unitId: string, _prev: WebsiteState, formData: FormData): Promise<WebsiteState> {
+  const profile = await requireProfile();
+  if (!can(profile.role, "units.manage")) return { error: "You do not have permission to edit units." };
+
+  let images: unknown = [];
+  try {
+    images = JSON.parse(String(formData.get("images") ?? "[]"));
+  } catch {
+    return { error: "Photos could not be read. Reload the page and try again." };
+  }
+  const parsed = schema.safeParse({
+    published: formData.get("published") === "on",
+    title: formData.get("title") ?? "",
+    slug: formData.get("slug") ?? "",
+    type: formData.get("type") ?? "",
+    area: formData.get("area") ?? "",
+    building: formData.get("building") ?? "",
+    tag: formData.get("tag") ?? "",
+    description: formData.get("description") ?? "",
+    highlights: formData.get("highlights") ?? "",
+    houseRules: formData.get("houseRules") ?? "",
+    amenities: formData.getAll("amenities").map(String),
+    images,
+    lat: formData.get("lat") ?? "",
+    lng: formData.get("lng") ?? "",
+    mapsUrl: formData.get("mapsUrl") ?? "",
+    checkIn: formData.get("checkIn") ?? "",
+    checkOut: formData.get("checkOut") ?? "",
+    seasons: formData.get("seasons") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+  const v = parsed.data;
+  const seasons = parseSeasons(v.seasons);
+  if (seasons.error) return { error: seasons.error };
+  if ((v.lat == null) !== (v.lng == null)) return { error: "Give both latitude and longitude, or neither." };
+
+  const slug = slugify(v.slug || v.title);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("units")
+    .update({
+      website_published: v.published,
+      website_slug: slug || null,
+      website_title: v.title || null,
+      website_tag: v.tag || null,
+      website_type: v.type || null,
+      website_area: v.area || null,
+      website_building: v.building || null,
+      website_description: v.description || null,
+      website_highlights: lines(v.highlights),
+      website_house_rules: lines(v.houseRules),
+      website_amenities: v.amenities,
+      website_images: v.images,
+      website_lat: v.lat,
+      website_lng: v.lng,
+      website_maps_url: v.mapsUrl || null,
+      website_check_in: v.checkIn,
+      website_check_out: v.checkOut,
+      website_seasons: seasons.seasons,
+    })
+    .eq("id", unitId);
+  if (error) {
+    if (error.message.includes("units_website_ready"))
+      return {
+        error:
+          "To publish, a home needs a web address, title, area, type, at least one photo, a nightly rate, max guests and short-term use. Fill those in or untick Published.",
+      };
+    if (error.code === "23505") return { error: "Another home already uses that web address." };
+    return { error: error.message };
+  }
+  revalidatePath(`/units/${unitId}`);
+  return { success: v.published ? "Saved. The website shows this home within a minute." : "Saved (not on the website)." };
+}

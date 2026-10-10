@@ -1,7 +1,7 @@
 import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarPlus, FileSignature, Pencil, Plus, ShieldAlert, Wrench } from "lucide-react";
+import { CalendarPlus, FileSignature, Globe, Pencil, Plus, ShieldAlert, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
@@ -258,6 +258,14 @@ export default async function UnitDetailPage({
                     Edit
                   </Link>
                 </Button>
+                {unit.operating_mode !== "long_term" && (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/units/${unit.id}/website`}>
+                      <Globe className="size-4" />
+                      Website
+                    </Link>
+                  </Button>
+                )}
                 <RecordActions
                   noun="unit"
                   idName="unitId"
