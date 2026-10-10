@@ -13,6 +13,7 @@ import { FormError, FormSection } from "@/components/domain/form";
 import { BookmarkletLink, CopyCode } from "@/components/domain/bookmarklet";
 import { collectAirbnbListing } from "@/lib/airbnb/listing-collect";
 import { MAX_IMPORTED_PHOTOS, mergeListing } from "@/lib/airbnb/listing-page";
+import { hasPrices, isHostPage } from "@/lib/airbnb/listing-prices";
 import { WEBSITE_AMENITIES } from "@/lib/website-options";
 import { WebsiteForm, type WebsiteDefaults } from "../[id]/website/website-form";
 import {
@@ -23,6 +24,7 @@ import {
   type ImportUnit,
   type ListingCapture,
 } from "./actions";
+import { PricesReview } from "./prices";
 
 type Unit = { id: string; label: string };
 type Found = Extract<ListingCapture, { listing: unknown }>;
@@ -106,7 +108,7 @@ export function ListingImport({
   if (ready) return <Filled ready={ready} onReset={reset} />;
   if (capture && !("error" in capture)) {
     return (
-      <Review
+      <Found
         found={capture}
         units={units}
         initialUnit={capture.unitId ?? presetUnitId ?? rememberedUnit() ?? ""}
@@ -177,6 +179,22 @@ export function ListingImport({
               website until you tick <strong>Published</strong> and save.
             </li>
           </ol>
+          <p className="font-medium">Prices</p>
+          <ol className="list-decimal space-y-1 pl-5 text-[var(--muted-foreground)]">
+            <li>
+              On Airbnb open <strong>Listings</strong> → the listing → <strong>Pricing</strong> (nightly and weekend
+              price, discounts, cleaning fee) and click <strong>Import listing to D|R|P</strong> there. Each price
+              shows what changes on the unit; check and save. Only AED prices are taken.
+            </li>
+            <li>
+              For seasonal rates, click it on the listing&apos;s <strong>Calendar</strong> too: where Airbnb labels
+              the days with their prices, the coming nights become the website&apos;s seasons.
+            </li>
+            <li>
+              This is a one-click refresh, not a live sync: when prices change on Airbnb (Smart Pricing included),
+              click the button again.
+            </li>
+          </ol>
         </CardContent>
       </Card>
 
@@ -197,12 +215,43 @@ export function ListingImport({
             placeholder="Paste the Airbnb listing page (or its source) here"
             aria-label="Airbnb listing page"
           />
+          <p className="text-[var(--muted-foreground)]">
+            Prices: on the Pricing page press <strong>⌘ + A</strong>, <strong>⌘ + C</strong> and paste it here.
+          </p>
           <Button type="button" disabled={pasted.trim().length < 20} onClick={readPasted}>
             <ClipboardPaste className="size-4" />
             Read the listing
           </Button>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/** A listing page fills the Website form; a pricing or calendar page, the unit's rates. */
+function Found(props: React.ComponentProps<typeof Review>) {
+  const { listing, prices } = props.found;
+  const hasListing = Boolean(listing.description || listing.photos.length || listing.amenities.length);
+  const [mode, setMode] = React.useState<"listing" | "prices">(
+    hasPrices(prices) && (isHostPage(listing.url) || !hasListing) ? "prices" : "listing"
+  );
+  return (
+    <div className="space-y-5">
+      {hasListing && hasPrices(prices) && (
+        <div className="flex gap-2">
+          <Button type="button" variant={mode === "listing" ? "default" : "outline"} onClick={() => setMode("listing")}>
+            Website details
+          </Button>
+          <Button type="button" variant={mode === "prices" ? "default" : "outline"} onClick={() => setMode("prices")}>
+            Prices
+          </Button>
+        </div>
+      )}
+      {mode === "prices" ? (
+        <PricesReview found={props.found} units={props.units} initialUnit={props.initialUnit} onReset={props.onReset} />
+      ) : (
+        <Review {...props} />
+      )}
     </div>
   );
 }

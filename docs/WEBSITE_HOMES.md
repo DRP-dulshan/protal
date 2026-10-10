@@ -40,6 +40,26 @@ the portal's server never loads an Airbnb page.
 
 Every field may be missing when Airbnb changes its pages; the form is then filled with what was found.
 
+### Prices from Airbnb
+The same button, clicked on the listing's **Pricing** page on Airbnb (Listings → the listing → Pricing),
+reads the nightly price, weekend price, weekly and monthly discounts and cleaning fee
+(`src/lib/airbnb/listing-prices.ts`: Airbnb's pricing JSON where the page carries it - price factors such as
+0.9 become 10 % - else the labels in the page's text; the short-stay cleaning fee is not the cleaning fee).
+Staff pick the unit and see each value as old → new before **Save prices to the unit** writes the unit's
+own `base_nightly_rate_aed`, `weekend_rate_aed`, `cleaning_fee_aed`, `weekly_discount_pct` and
+`monthly_discount_pct` (migration 0020). Only AED: a page in another currency is shown as such and nothing
+can be saved. Prices are read only from Airbnb's host pages (or pasted text with the pricing labels), never
+from the guest listing page, whose prices include Airbnb's fees.
+
+Seasonal rates: clicked on the listing's host **Calendar**, the button reads days whose accessible label
+(or title) carries a date and a price. The coming year's nights that differ from the nightly rate become
+`website_seasons` rows, consecutive nights at one price merged (`from` and `to` are both nights of the stay),
+and replace the website's seasons only if staff leave that ticked. Whether Airbnb's calendar labels its days
+this way has not been confirmed on a live page; when it does not, no seasons are offered.
+
+This is a **one-click refresh, not a live sync**: Airbnb price changes, Smart Pricing included, are not
+followed. Click the button again when prices change.
+
 ## API (service-to-service)
 | Endpoint | Auth | Purpose |
 |---|---|---|

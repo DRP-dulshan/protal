@@ -56,7 +56,7 @@ export function fullSizePhotoUrl(raw: string): string | null {
 }
 
 export function listingIdOf(url: string | null): string | null {
-  const m = url?.match(/airbnb\.[a-z.]+\/(?:rooms(?:\/plus)?|hosting\/listings(?:\/editor)?|manage-your-space|multicalendar)\/(\d{3,25})/i);
+  const m = url?.match(/airbnb\.[a-z.]+\/(?:rooms(?:\/plus)?|hosting\/listings(?:\/editor)?|hosting\/calendar|manage-your-space|multicalendar)\/(\d{3,25})/i);
   return m?.[1] ?? null;
 }
 

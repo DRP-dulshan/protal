@@ -7,7 +7,8 @@
  *
  * Airbnb ships the listing as JSON inside the page (script tags); the function
  * walks all of it for the shapes it knows (amenities, the description,
- * person capacity, photo addresses) rather than for exact paths, so a renamed
+ * person capacity, photo addresses, host pricing settings) rather than for
+ * exact paths, so a renamed
  * section still yields most fields. Every field may come back empty.
  *
  * It must stay self-contained (no imports, no outside names, plain syntax that browsers run as is):
@@ -29,6 +30,10 @@ export interface AirbnbListingSent {
   photos: string[];
   /** The page's visible text (empty when read from a page source). */
   text: string;
+  /** Host pricing settings found in the page's JSON (amounts, factors, currency). */
+  prices: Record<string, number | string>;
+  /** Calendar days' labels carrying a date and a price ("Thu, October 15, 2026, AED 450"). */
+  nights: string[];
 }
 
 export function collectAirbnbListing(doc: Document, href: string, withText: boolean): AirbnbListingSent {
@@ -42,6 +47,22 @@ export function collectAirbnbListing(doc: Document, href: string, withText: bool
   let desc = "";
   let guests: number | null = null;
   let nodes = 0;
+  const prices: Record<string, number | string> = {};
+  // Airbnb's host pricing settings, under the names its pages have used.
+  const priceKeys: Record<string, string> = {
+    defaultDailyPrice: "nightly",
+    default_daily_price: "nightly",
+    weekendPrice: "weekend",
+    weekend_price: "weekend",
+    weeklyPriceFactor: "weeklyFactor",
+    weekly_price_factor: "weeklyFactor",
+    monthlyPriceFactor: "monthlyFactor",
+    monthly_price_factor: "monthlyFactor",
+    cleaningFee: "cleaning",
+    cleaning_fee: "cleaning",
+    listingCurrency: "currency",
+    listing_currency: "currency",
+  };
 
   function addPhotos(s: string) {
     const re = /https:\/\/[a-z0-9.-]*muscache\.com\/im\/pictures\/[^\s"'?#\\),]+/gi;
@@ -90,7 +111,16 @@ export function collectAirbnbListing(doc: Document, href: string, withText: bool
     if (typeof r.personCapacity === "number" && guests == null) guests = r.personCapacity;
     if (typeof r.numberOfBedrooms === "number") addFact(r.numberOfBedrooms + " bedrooms");
     if (typeof r.numberOfBathroomsTotal === "number") addFact(r.numberOfBathroomsTotal + " baths");
-    for (const k in r) if (Object.prototype.hasOwnProperty.call(r, k)) walk(r[k], depth + 1);
+    for (const k in r) {
+      if (!Object.prototype.hasOwnProperty.call(r, k)) continue;
+      const v = r[k];
+      const key = priceKeys[k];
+      if (key && !(key in prices)) {
+        const amount = v && typeof v === "object" ? (v as Record<string, unknown>).amount : v;
+        if (typeof amount === "number" || (typeof amount === "string" && amount.length < 20)) prices[key] = amount;
+      }
+      walk(v, depth + 1);
+    }
   }
 
   function addAmenity(name: string) {
@@ -121,6 +151,22 @@ export function collectAirbnbListing(doc: Document, href: string, withText: bool
   };
   addPhotos(meta('meta[property="og:image"]'));
 
+  // The host calendar: days labelled with their date and price.
+  const nights: string[] = [];
+  const seenNight: Record<string, boolean> = {};
+  const days = doc.querySelectorAll("[aria-label], [title]");
+  for (let d = 0; d < days.length && nights.length < 400; d++) {
+    let label = days[d].getAttribute("aria-label") || days[d].getAttribute("title") || "";
+    if (label.length > 200 || !/\b20\d\d\b/.test(label)) continue;
+    const money = /AED|USD|EUR|GBP|SAR|د\.إ|\$|€|£/;
+    const shown = (days[d].textContent || "").trim();
+    if (!money.test(label) && shown.length < 60 && money.test(shown)) label += " " + shown;
+    if (money.test(label) && !seenNight[label]) {
+      seenNight[label] = true;
+      nights.push(label);
+    }
+  }
+
   const h1 = doc.querySelector("h1");
   if (!title && h1) title = (h1.textContent || "").trim();
   if (!title) title = meta('meta[property="og:title"]');
@@ -136,6 +182,8 @@ export function collectAirbnbListing(doc: Document, href: string, withText: bool
     amenities: amenities,
     photos: photos.slice(0, 100),
     text: withText && body ? String(body.innerText || "").slice(0, 15000) : "",
+    prices: prices,
+    nights: nights,
   };
 
   // The button hands this over in the address (#...): keep it well inside
@@ -145,6 +193,7 @@ export function collectAirbnbListing(doc: Document, href: string, withText: bool
   };
   while (size() > MAX_ENCODED && out.text.length > 0) out.text = out.text.slice(0, Math.floor(out.text.length / 2) - 1);
   while (size() > MAX_ENCODED && out.desc && out.desc.length > 500) out.desc = out.desc.slice(0, Math.floor(out.desc.length / 2));
+  while (size() > MAX_ENCODED && out.nights.length > 30) out.nights = out.nights.slice(0, out.nights.length - 30);
   while (size() > MAX_ENCODED && out.photos.length > 10) out.photos = out.photos.slice(0, out.photos.length - 10);
   return out;
 }

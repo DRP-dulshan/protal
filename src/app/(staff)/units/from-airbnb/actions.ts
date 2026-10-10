@@ -7,6 +7,9 @@ import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { mapAirbnbAmenities, parseAirbnbListing, type AirbnbListing } from "@/lib/airbnb/listing-page";
 import { downloadAirbnbPhoto } from "@/lib/airbnb/listing-photos";
+import { hasPrices, parseAirbnbPrices, type AirbnbPrices } from "@/lib/airbnb/listing-prices";
+import { dubaiToday } from "@/lib/calendar";
+import { parseSeasons, seasonsToText } from "@/lib/website-options";
 import { storeWebsitePhoto } from "@/lib/website-photos";
 import { websiteDefaults } from "../[id]/website/defaults";
 import type { WebsiteDefaults } from "../[id]/website/website-form";
@@ -22,6 +25,10 @@ export type ListingCapture =
   | { error: string }
   | {
       listing: AirbnbListing;
+      /** From a host pricing or calendar page; empty elsewhere. */
+      prices: AirbnbPrices;
+      /** Dubai's date, for the calendar's coming nights. */
+      today: string;
       /** Website amenity ids found, and Airbnb names the website has no match for. */
       amenityIds: string[];
       unmatched: string[];
@@ -37,8 +44,13 @@ export type ListingCapture =
 export async function readAirbnbListing(sent: unknown): Promise<ListingCapture> {
   if (!(await allowed())) return { error: NOT_ALLOWED };
   const listing = parseAirbnbListing(sent);
-  if (!listing.title && !listing.description && !listing.photos.length && !listing.amenities.length) {
-    return { error: "Nothing was found on that page. Open the listing on Airbnb (airbnb.com/rooms/…) and try again." };
+  const today = dubaiToday();
+  const prices = parseAirbnbPrices(sent, today);
+  if (!listing.title && !listing.description && !listing.photos.length && !listing.amenities.length && !hasPrices(prices)) {
+    return {
+      error:
+        "Nothing was found on that page. Open the listing (airbnb.com/rooms/…) or its Pricing page on Airbnb and try again.",
+    };
   }
 
   const supabase = await createClient();
@@ -55,7 +67,7 @@ export async function readAirbnbListing(sent: unknown): Promise<ListingCapture> 
   }
 
   const { ids, unmatched } = mapAirbnbAmenities(listing.amenities);
-  return { listing, amenityIds: ids, unmatched, unitId };
+  return { listing, prices, today, amenityIds: ids, unmatched, unitId };
 }
 
 export type ImportUnit = {
@@ -136,4 +148,107 @@ export async function applyAirbnbFacts(unitId: string, facts: z.input<typeof fac
   if (!data?.length) return { error: NOT_ALLOWED };
   revalidatePath(`/units/${unitId}`);
   return { success: "The unit's bedrooms, bathrooms and guests are updated." };
+}
+
+export type UnitPrices = {
+  id: string;
+  label: string;
+  nightly: number | null;
+  weekend: number | null;
+  cleaning: number | null;
+  weeklyDiscount: number | null;
+  monthlyDiscount: number | null;
+  seasons: string;
+};
+
+const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
+
+/** The unit's own rates now, to show next to Airbnb's. */
+export async function loadUnitPrices(unitId: string): Promise<{ error: string } | { unit: UnitPrices }> {
+  if (!(await allowed())) return { error: NOT_ALLOWED };
+  if (!z.string().uuid().safeParse(unitId).success) return { error: "Choose the unit." };
+  const supabase = await createClient();
+  const { data: u } = await supabase
+    .from("units")
+    .select(
+      "id, unit_number, is_active, operating_mode, base_nightly_rate_aed, weekend_rate_aed, cleaning_fee_aed, weekly_discount_pct, monthly_discount_pct, website_seasons, properties(name)"
+    )
+    .eq("id", unitId)
+    .maybeSingle();
+  if (!u) return { error: "Unit not found." };
+  if (!u.is_active || u.operating_mode === "long_term") return { error: "Only active short-term units take nightly rates." };
+  return {
+    unit: {
+      id: u.id,
+      label: [u.properties?.name, u.unit_number].filter(Boolean).join(" · "),
+      nightly: num(u.base_nightly_rate_aed),
+      weekend: num(u.weekend_rate_aed),
+      cleaning: num(u.cleaning_fee_aed),
+      weeklyDiscount: num(u.weekly_discount_pct),
+      monthlyDiscount: num(u.monthly_discount_pct),
+      seasons: seasonsToText(u.website_seasons),
+    },
+  };
+}
+
+export type PricesState = { error?: string; success?: string };
+
+const amount = z.union([z.literal("").transform(() => null), z.coerce.number().min(0).max(1_000_000)]);
+const pct = z.union([
+  z.literal("").transform(() => null),
+  z.coerce.number().min(0, "Discounts are 0 to 99 %").lt(100, "Discounts are 0 to 99 %"),
+]);
+const pricesSchema = z.object({
+  nightly: amount,
+  weekend: amount,
+  cleaning: amount,
+  weeklyDiscount: pct,
+  monthlyDiscount: pct,
+  replaceSeasons: z.boolean(),
+  seasons: z.string().max(5000),
+});
+
+/**
+ * Saves the rates staff confirmed onto the unit (migration 0020 columns), and
+ * the website's seasonal rates when they ticked that. Amounts are AED: the
+ * page refuses other currencies before this is reached.
+ */
+export async function saveAirbnbPrices(unitId: string, _prev: PricesState, formData: FormData): Promise<PricesState> {
+  if (!(await allowed())) return { error: NOT_ALLOWED };
+  if (!z.string().uuid().safeParse(unitId).success) return { error: "Choose the unit." };
+  const parsed = pricesSchema.safeParse({
+    nightly: formData.get("nightly") ?? "",
+    weekend: formData.get("weekend") ?? "",
+    cleaning: formData.get("cleaning") ?? "",
+    weeklyDiscount: formData.get("weeklyDiscount") ?? "",
+    monthlyDiscount: formData.get("monthlyDiscount") ?? "",
+    replaceSeasons: formData.get("replaceSeasons") === "on",
+    seasons: formData.get("seasons") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the prices." };
+  const v = parsed.data;
+  const seasons = v.replaceSeasons ? parseSeasons(v.seasons) : null;
+  if (seasons?.error) return { error: seasons.error };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("units")
+    .update({
+      base_nightly_rate_aed: v.nightly,
+      weekend_rate_aed: v.weekend,
+      cleaning_fee_aed: v.cleaning,
+      weekly_discount_pct: v.weeklyDiscount,
+      monthly_discount_pct: v.monthlyDiscount,
+      ...(seasons && { website_seasons: seasons.seasons }),
+    })
+    .eq("id", unitId)
+    .select("id");
+  if (error) {
+    if (error.message.includes("units_website_ready"))
+      return { error: "This home is on the website, so it needs a nightly rate above 0." };
+    return { error: error.message };
+  }
+  if (!data?.length) return { error: NOT_ALLOWED };
+  revalidatePath(`/units/${unitId}`);
+  return { success: "Prices saved. The website uses them within a minute." };
 }

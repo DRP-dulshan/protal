@@ -31,7 +31,7 @@ export default async function FromAirbnbListingPage({ searchParams }: { searchPa
       <PageHeader
         breadcrumb={[{ label: "Units", href: "/units" }]}
         title="Import from Airbnb"
-        description="Fills a unit's page on the Holiday Homes website from its Airbnb listing: title, description, amenities and photos."
+        description="Fills a unit's page on the Holiday Homes website from its Airbnb listing (title, description, amenities, photos), and its rates from the listing's Pricing page."
       />
       <ListingImport
         bookmarklet={listingBookmarklet(`${env.adminUrl}/units/from-airbnb`)}
