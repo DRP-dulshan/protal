@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -19,6 +18,7 @@ import {
 } from "@/lib/listings";
 import { rebuildWebsite } from "@/lib/website";
 import { env } from "@/lib/env";
+import { MAX_PHOTO_BYTES, PHOTO_EXTENSIONS, storeWebsitePhoto } from "@/lib/website-photos";
 
 export type ListingState = { error?: string; success?: string };
 
@@ -197,28 +197,16 @@ export async function deleteListing(id: string): Promise<ListingState> {
   redirect(`/website/listings?saved=${listing.status !== "published" ? "deleted" : rebuild?.started ? "live" : "pending"}`);
 }
 
-const MAX_PHOTO = 10 * 1024 * 1024;
-const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-
 /** Uploads one photo to the public bucket and returns its address. */
 export async function uploadListingPhoto(formData: FormData): Promise<{ url?: string; error?: string }> {
   const profile = await requireEditor();
   if (!profile) return { error: NOT_ALLOWED };
   const file = formData.get("photo");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a photo." };
-  if (file.size > MAX_PHOTO) return { error: `${file.name} is larger than 10 MB.` };
-  if (!PHOTO_TYPES.has(file.type)) return { error: `${file.name}: use JPG, PNG, WebP or AVIF.` };
+  if (file.size > MAX_PHOTO_BYTES) return { error: `${file.name} is larger than 10 MB.` };
+  if (!PHOTO_EXTENSIONS[file.type]) return { error: `${file.name}: use JPG, PNG, WebP or AVIF.` };
 
-  const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/avif": "avif" }[file.type];
-  const base = slugify(file.name.replace(/\.[^.]+$/, "")).slice(0, 40) || "photo";
-  const path = `${new Date().toISOString().slice(0, 7)}/${randomBytes(6).toString("hex")}-${base}.${ext}`;
-
-  const supabase = await createClient();
-  const { error } = await supabase.storage
-    .from(PHOTO_BUCKET)
-    .upload(path, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
-  if (error) return { error: `Upload failed: ${error.message}` };
-  return { url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl };
+  return storeWebsitePhoto(await createClient(), file, file.type, file.name);
 }
 
 /** "Update website now": a rebuild without changing anything. */

@@ -9,6 +9,37 @@ Unit page → **Website**. Fill in the title, area, type, photos and tick **Publ
 Nightly rate, max guests, cleaning fee, weekend rate and weekly/monthly discounts come from the unit itself.
 The database refuses to publish a home that lacks what the website needs (`units_website_ready`).
 
+## Importing a home from its Airbnb listing
+Unit → **Website** → **Import from Airbnb** (or `/units/from-airbnb`). Airbnb has no API for listings, so,
+like the "Send to D|R|P" reservation button, this runs in the staff member's own browser on airbnb.com;
+the portal's server never loads an Airbnb page.
+
+1. **The "Import listing to D|R|P" button** (a bookmarklet; set-up steps are on the import page). On a
+   listing (`airbnb.com/rooms/<id>`, or the host's listing editor) it reads the JSON Airbnb ships inside the
+   page (`src/lib/airbnb/listing-collect.ts`): title, description, person capacity, bedroom/bath counts,
+   available amenities and every photo address on `a0.muscache.com` (the full gallery, host avatars left
+   out). It opens the import page with that in the URL fragment (`#…`), which never reaches the server or its
+   logs. The fragment is kept under ~60 KB (page text, then the description, then photos are trimmed first),
+   well inside what browsers accept; photo addresses go without their `?im_w=` size, about 100 bytes each.
+2. **Or paste**: the listing's page source (⌘ + Option + U, which carries the photos; read in the browser by
+   the same collector) or its visible text (no photos).
+3. **Check**: the page shows what was found, the amenities that map to the website's list
+   (`mapAirbnbAmenities` in `src/lib/airbnb/listing-page.ts`; names with no match, or only a loose one such as a
+   plain "Elevator", are left out and listed), and picks the unit whose `airbnb_ical_url` carries the listing
+   number (else its `airbnb_listing_name`, else the unit the import was opened from). Staff pick the photos
+   (at most 60) and whether they replace or follow the unit's current ones.
+4. **Photos are copied**, six per request, into the portal's `listing-photos` bucket
+   (`copyAirbnbPhotos`): only `https://*.muscache.com` addresses, no redirects followed, 20 s timeout, at most
+   10 MB, and only real JPG/PNG/WebP/AVIF (declared type and first bytes). The website never hotlinks
+   Airbnb; the Website form also refuses `muscache.com` photo addresses on save.
+5. **The unit's Website form opens filled in**: Airbnb's title and description, amenities added to the ticked
+   ones, a web address from the title (if the unit has none), and area/type only when the title makes them
+   plain. Bedrooms, bathrooms and max guests stay the unit's own unless staff click **Use Airbnb's numbers on
+   the unit**. Nothing is saved until **Save website details**, and nothing is published unless **Published**
+   is ticked - the `units_website_ready` constraint still applies.
+
+Every field may be missing when Airbnb changes its pages; the form is then filled with what was found.
+
 ## API (service-to-service)
 | Endpoint | Auth | Purpose |
 |---|---|---|

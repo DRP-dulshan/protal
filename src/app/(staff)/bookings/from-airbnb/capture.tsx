@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Bookmark, ClipboardPaste, Copy, RotateCcw } from "lucide-react";
-import { toast } from "sonner";
+import { ClipboardPaste, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Callout } from "@/components/domain/shared";
+import { BookmarkletLink, CopyCode } from "@/components/domain/bookmarklet";
 import { FormError, FormSection, SelectField, SubmitBar, TextField } from "@/components/domain/form";
 import { formatDate } from "@/lib/dates";
 import { readAirbnbPage, saveAirbnbReservation, type Capture } from "./actions";
@@ -58,7 +58,7 @@ export function AirbnbCapture({ bookmarklet, units }: { bookmarklet: string; uni
             </li>
             <li>Drag this button onto the bookmarks bar:</li>
           </ol>
-          <BookmarkletLink code={bookmarklet} />
+          <BookmarkletLink code={bookmarklet} label="Send to D|R|P" />
           <details className="rounded-md border border-[var(--border)] p-3">
             <summary className="cursor-pointer font-medium">Dragging does not work? Add it by hand</summary>
             <div className="mt-3 space-y-3">
@@ -128,54 +128,6 @@ export function AirbnbCapture({ bookmarklet, units }: { bookmarklet: string; uni
           </Button>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-/** React refuses javascript: links in JSX, so the href is set on the element. */
-function BookmarkletLink({ code }: { code: string }) {
-  const ref = React.useRef<HTMLAnchorElement>(null);
-  React.useEffect(() => {
-    ref.current?.setAttribute("href", code);
-  }, [code]);
-  return (
-    <a
-      ref={ref}
-      onClick={(e) => e.preventDefault()}
-      className="inline-flex cursor-grab items-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2 font-medium text-[var(--primary-foreground)]"
-      title="Drag me to the bookmarks bar"
-    >
-      <Bookmark className="size-4" />
-      Send to D|R|P
-    </a>
-  );
-}
-
-function CopyCode({ code }: { code: string }) {
-  return (
-    <div className="space-y-2">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(code);
-            toast.success("Copied. Now add the bookmark as below.");
-          } catch {
-            toast.error("Could not copy. Click the code below, then press ⌘ + C.");
-          }
-        }}
-      >
-        <Copy className="size-4" />
-        Copy the button&apos;s code
-      </Button>
-      <input
-        readOnly
-        value={code}
-        onFocus={(e) => e.target.select()}
-        aria-label="The button's code"
-        className="block w-full rounded-md border border-[var(--border)] bg-[var(--muted)] px-2 py-1 font-mono text-xs"
-      />
     </div>
   );
 }

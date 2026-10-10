@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { slugify } from "@/lib/listings";
+import { isAirbnbPhotoUrl } from "@/lib/airbnb/listing-page";
 import { WEBSITE_AMENITIES, WEBSITE_TYPES, parseSeasons } from "@/lib/website-options";
 
 export type WebsiteState = { error?: string; success?: string };
@@ -25,7 +26,10 @@ const schema = z.object({
   highlights: z.string().max(5000),
   houseRules: z.string().max(5000),
   amenities: z.array(z.string()).refine((a) => a.every((x) => x in WEBSITE_AMENITIES), "Unknown amenity"),
-  images: z.array(z.string().regex(/^https:\/\/\S+$/, "Photo addresses must start with https://")).max(60),
+  images: z
+    .array(z.string().regex(/^https:\/\/\S+$/, "Photo addresses must start with https://"))
+    .max(60)
+    .refine((a) => !a.some(isAirbnbPhotoUrl), "Airbnb's photo addresses cannot go on the website: use Import from Airbnb, which copies the photos."),
   lat: numOrNull,
   lng: numOrNull,
   mapsUrl: z.union([z.literal(""), z.string().url().startsWith("https://")]),
