@@ -1,0 +1,34 @@
+import { randomBytes } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/db/database.types";
+import { PHOTO_BUCKET, slugify } from "@/lib/listings";
+
+/** Photos the website shows: what the public bucket (migration 0028) accepts. */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+export const PHOTO_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/avif": "avif",
+};
+
+/**
+ * Stores one photo in the portal's public bucket and returns its address.
+ * Runs as the signed-in user, so the bucket's policy decides who may upload.
+ */
+export async function storeWebsitePhoto(
+  supabase: SupabaseClient<Database>,
+  body: Blob | Uint8Array,
+  contentType: string,
+  name: string
+): Promise<{ url?: string; error?: string }> {
+  const ext = PHOTO_EXTENSIONS[contentType];
+  if (!ext) return { error: `${name}: use JPG, PNG, WebP or AVIF.` };
+  const base = slugify(name.replace(/\.[^.]+$/, "")).slice(0, 40) || "photo";
+  const path = `${new Date().toISOString().slice(0, 7)}/${randomBytes(6).toString("hex")}-${base}.${ext}`;
+  const { error } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(path, body, { contentType, cacheControl: "31536000", upsert: false });
+  if (error) return { error: `Upload failed: ${error.message}` };
+  return { url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl };
+}

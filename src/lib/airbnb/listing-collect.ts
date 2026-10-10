@@ -1,0 +1,215 @@
+/**
+ * Collects an Airbnb listing from its page (airbnb.com/rooms/<id>, or the
+ * host's listing editor) in the browser. The "Import listing to D|R|P" button
+ * runs this function on airbnb.com - its source is put into the bookmarklet -
+ * and the import page runs it on a pasted page source. Nothing fetches Airbnb
+ * from the portal's server.
+ *
+ * Airbnb ships the listing as JSON inside the page (script tags); the function
+ * walks all of it for the shapes it knows (amenities, the description,
+ * person capacity, photo addresses, host pricing settings) rather than for
+ * exact paths, so a renamed
+ * section still yields most fields. Every field may come back empty.
+ *
+ * It must stay self-contained (no imports, no outside names, plain syntax that browsers run as is):
+ * `collectAirbnbListing.toString()` becomes the bookmarklet.
+ */
+
+export interface AirbnbListingSent {
+  /** The listing page's address. */
+  u: string;
+  title: string | null;
+  /** The description as Airbnb stores it (may be HTML). */
+  desc: string | null;
+  guests: number | null;
+  /** Short lines like "2 bedrooms", "1.5 baths", "4 guests". */
+  facts: string[];
+  /** Amenity names as Airbnb shows them (available ones only). */
+  amenities: string[];
+  /** Photo addresses on muscache.com, in page order. */
+  photos: string[];
+  /** The page's visible text (empty when read from a page source). */
+  text: string;
+  /** Host pricing settings found in the page's JSON (amounts, factors, currency). */
+  prices: Record<string, number | string>;
+  /** Calendar days' labels carrying a date and a price ("Thu, October 15, 2026, AED 450"). */
+  nights: string[];
+}
+
+export function collectAirbnbListing(doc: Document, href: string, withText: boolean): AirbnbListingSent {
+  const MAX_ENCODED = 60000;
+  const photos: string[] = [];
+  const seenPhoto: Record<string, boolean> = {};
+  const amenities: string[] = [];
+  const seenAmenity: Record<string, boolean> = {};
+  const facts: string[] = [];
+  let title = "";
+  let desc = "";
+  let guests: number | null = null;
+  let nodes = 0;
+  const prices: Record<string, number | string> = {};
+  // Airbnb's host pricing settings, under the names its pages have used.
+  const priceKeys: Record<string, string> = {
+    defaultDailyPrice: "nightly",
+    default_daily_price: "nightly",
+    weekendPrice: "weekend",
+    weekend_price: "weekend",
+    weeklyPriceFactor: "weeklyFactor",
+    weekly_price_factor: "weeklyFactor",
+    monthlyPriceFactor: "monthlyFactor",
+    monthly_price_factor: "monthlyFactor",
+    cleaningFee: "cleaning",
+    cleaning_fee: "cleaning",
+    listingCurrency: "currency",
+    listing_currency: "currency",
+  };
+
+  function addPhotos(s: string) {
+    const re = /https:\/\/[a-z0-9.-]*muscache\.com\/im\/pictures\/[^\s"'?#\\),]+/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) && photos.length < 120) {
+      const url = m[0];
+      if (/\/(user|users|airbnb-platform-assets|ui)\//i.test(url)) continue;
+      if (!seenPhoto[url]) {
+        seenPhoto[url] = true;
+        photos.push(url);
+      }
+    }
+  }
+
+  function addFact(s: string) {
+    if (facts.length < 30 && s.length < 120 && /\d\s*\+?\s*(guest|bedroom|bed|bath|bathroom)s?\b|\bstudio\b/i.test(s)) facts.push(s);
+  }
+
+  function walk(o: unknown, depth: number) {
+    if (o == null || depth > 60 || ++nodes > 400000) return;
+    if (typeof o === "string") {
+      if (o.indexOf("muscache.com") >= 0) addPhotos(o);
+      else if (o.length < 120) addFact(o);
+      return;
+    }
+    if (typeof o !== "object") return;
+    if (Array.isArray(o)) {
+      for (let i = 0; i < o.length; i++) walk(o[i], depth + 1);
+      return;
+    }
+    const r = o as Record<string, unknown>;
+    const type = typeof r.__typename === "string" ? r.__typename : "";
+    const ldType = String(r["@type"] || "");
+    // Airbnb's own amenity objects: { __typename: "Amenity", title, available }.
+    if (/Amenity$/.test(type) && typeof r.title === "string" && r.available !== false) addAmenity(r.title);
+    // schema.org: { amenityFeature: [{ name, value }] }.
+    if (/LocationFeatureSpecification/.test(ldType) && typeof r.name === "string" && r.value !== false) addAmenity(r.name);
+    if (/TitleSection$/.test(type) && typeof r.title === "string" && !title) title = r.title;
+    if (typeof r.listingTitle === "string" && !title) title = r.listingTitle;
+    if (/VacationRental|Accommodation|Apartment|House|LodgingBusiness|Product/.test(ldType)) {
+      if (typeof r.name === "string" && !title) title = r.name;
+      if (typeof r.description === "string" && r.description.length > desc.length) desc = r.description;
+    }
+    const html = r.htmlDescription as Record<string, unknown> | undefined;
+    if (html && typeof html.htmlText === "string" && html.htmlText.length > desc.length) desc = html.htmlText;
+    if (typeof r.personCapacity === "number" && guests == null) guests = r.personCapacity;
+    if (typeof r.numberOfBedrooms === "number") addFact(r.numberOfBedrooms + " bedrooms");
+    if (typeof r.numberOfBathroomsTotal === "number") addFact(r.numberOfBathroomsTotal + " baths");
+    for (const k in r) {
+      if (!Object.prototype.hasOwnProperty.call(r, k)) continue;
+      const v = r[k];
+      const key = priceKeys[k];
+      if (key && !(key in prices)) {
+        const amount = v && typeof v === "object" ? (v as Record<string, unknown>).amount : v;
+        if (typeof amount === "number" || (typeof amount === "string" && amount.length < 20)) prices[key] = amount;
+      }
+      walk(v, depth + 1);
+    }
+  }
+
+  function addAmenity(name: string) {
+    const n = name.replace(/\s+/g, " ").trim();
+    if (n && !/^unavailable:/i.test(n) && !seenAmenity[n.toLowerCase()] && amenities.length < 150) {
+      seenAmenity[n.toLowerCase()] = true;
+      amenities.push(n);
+    }
+  }
+
+  const scripts = doc.querySelectorAll('script[type="application/json"], script[type="application/ld+json"]');
+  for (let s = 0; s < scripts.length; s++) {
+    try {
+      walk(JSON.parse(scripts[s].textContent || ""), 0);
+    } catch {
+      // Not JSON after all; the rest of the page still counts.
+    }
+  }
+
+  // Photos shown on the page (the editor, or a page whose JSON was not found).
+  const imgs = doc.querySelectorAll("img[src], img[srcset], source[srcset]");
+  for (let j = 0; j < imgs.length; j++) {
+    addPhotos((imgs[j].getAttribute("src") || "") + " " + (imgs[j].getAttribute("srcset") || ""));
+  }
+  const meta = function (sel: string) {
+    const el = doc.querySelector(sel);
+    return el ? el.getAttribute("content") || "" : "";
+  };
+  addPhotos(meta('meta[property="og:image"]'));
+
+  // The host calendar: days labelled with their date and price.
+  const nights: string[] = [];
+  const seenNight: Record<string, boolean> = {};
+  const days = doc.querySelectorAll("[aria-label], [title]");
+  for (let d = 0; d < days.length && nights.length < 400; d++) {
+    let label = days[d].getAttribute("aria-label") || days[d].getAttribute("title") || "";
+    if (label.length > 200 || !/\b20\d\d\b/.test(label)) continue;
+    const money = /AED|USD|EUR|GBP|SAR|د\.إ|\$|€|£/;
+    const shown = (days[d].textContent || "").trim();
+    if (!money.test(label) && shown.length < 60 && money.test(shown)) label += " " + shown;
+    if (money.test(label) && !seenNight[label]) {
+      seenNight[label] = true;
+      nights.push(label);
+    }
+  }
+
+  const h1 = doc.querySelector("h1");
+  if (!title && h1) title = (h1.textContent || "").trim();
+  if (!title) title = meta('meta[property="og:title"]');
+  if (!desc) desc = meta('meta[property="og:description"]') || meta('meta[name="description"]');
+
+  const body = doc.body as HTMLElement | null;
+  const out: AirbnbListingSent = {
+    u: String(href).slice(0, 500),
+    title: title ? title.slice(0, 300) : null,
+    desc: desc ? desc.slice(0, 20000) : null,
+    guests: guests,
+    facts: facts,
+    amenities: amenities,
+    photos: photos.slice(0, 100),
+    text: withText && body ? String(body.innerText || "").slice(0, 15000) : "",
+    prices: prices,
+    nights: nights,
+  };
+
+  // The button hands this over in the address (#...): keep it well inside
+  // what browsers accept by trimming the text first, then the description.
+  const size = function () {
+    return encodeURIComponent(JSON.stringify(out)).length;
+  };
+  while (size() > MAX_ENCODED && out.text.length > 0) out.text = out.text.slice(0, Math.floor(out.text.length / 2) - 1);
+  while (size() > MAX_ENCODED && out.desc && out.desc.length > 500) out.desc = out.desc.slice(0, Math.floor(out.desc.length / 2));
+  while (size() > MAX_ENCODED && out.nights.length > 30) out.nights = out.nights.slice(0, out.nights.length - 30);
+  while (size() > MAX_ENCODED && out.photos.length > 10) out.photos = out.photos.slice(0, out.photos.length - 10);
+  return out;
+}
+
+/**
+ * The bookmarklet: collects the listing on airbnb.com and opens `target` in a
+ * new tab with it in the fragment (#...), which never reaches the server or
+ * its logs. Encoded, because a javascript: address is URL-decoded before it
+ * runs.
+ */
+export function listingBookmarklet(target: string): string {
+  const code =
+    "(function(){try{var d=(" +
+    collectAirbnbListing.toString() +
+    ")(document,location.href,true);" +
+    `window.open(${JSON.stringify(target)}+'#'+encodeURIComponent(JSON.stringify(d)),'_blank','noopener');` +
+    "}catch(e){alert('D|R|P could not read this page. Use copy and paste on the import page instead.');}})();";
+  return "javascript:" + encodeURIComponent(code);
+}
